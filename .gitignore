@@ -30,3 +30,6 @@ next-env.d.ts
 .vscode/
 .idea/
 *.swp
+
+# data (local JSON storage for job output)
+/data/
