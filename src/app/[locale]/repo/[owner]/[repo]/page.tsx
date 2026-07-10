@@ -95,7 +95,12 @@ export default async function RepoDetailPage({ params }: PageProps) {
             </div>
           }
         >
-          <ReadmeViewer content={detail.readme_content} />
+          <ReadmeViewer
+            content={detail.readme_content}
+            owner={detail.owner}
+            repo={detail.repo}
+            defaultBranch={detail.default_branch}
+          />
         </Suspense>
 
         {/* 6. 趋势历史表 */}

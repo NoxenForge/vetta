@@ -16,6 +16,9 @@ npm run lint     # ESLint (next lint)
 - **Framework:** Next.js 15 (App Router) with Turbopack
 - **UI:** React 19, TailwindCSS v4, **shadcn/ui** (base-nova style, neutral base), **Base UI** (headless primitives)
 - **Styling:** `class-variance-authority` (component variants), `clsx` + `tailwind-merge` (class merging via `cn()`), `tw-animate-css`
+- **Charts:** recharts (LineChart) — used in star growth and fork trend charts on repo detail pages
+- **Markdown 渲染:** `react-markdown` + `remark-gfm` + `remark-gemoji` + `rehype-raw` + `rehype-highlight`，使用 `github-markdown-css` 实现 GitHub 官方视觉样式
+- **GFM Alert 支持:** 自定义 `blockquote` 组件将 `> [!NOTE]` / `[!WARNING]` 等渲染为彩色提示框
 - **Icons:** lucide-react
 - **Theme:** `next-themes` — dark/light/system mode with CSS custom properties in `globals.css`
 - **Font:** Geist (next/font/google)
@@ -49,7 +52,7 @@ src/
 │       ├── privacy/page.tsx             # Privacy policy page
 │       ├── terms/page.tsx               # Terms of service page
 │       └── repo/[owner]/[repo]/
-│           ├── page.tsx                 # Repo detail: RepoHeader, ReadmeViewer, TrendChart
+│           ├── page.tsx                 # Repo detail: 6 Suspense sections (see Architecture Notes)
 │           ├── loading.tsx              # RepoDetailSkeleton
 │           └── error.tsx                # Error boundary
 ├── components/
@@ -63,11 +66,14 @@ src/
 │   │   ├── trending-header.tsx          # Page heading + time range selector
 │   │   ├── language-filter.tsx          # Programming language filter bar
 │   │   ├── repository-grid.tsx          # Responsive card grid
-│   │   ├── repository-card.tsx          # Individual repo card
+│   │   ├── repository-card.tsx          # Individual repo card (clickable → detail page)
 │   │   ├── repository-card-skeleton.tsx # Loading placeholder
 │   │   └── time-range-selector.tsx      # daily/weekly/monthly toggle
 │   └── repo/                            # Repo detail page components
-│       ├── repo-header.tsx              # Repo metadata header
+│       ├── repo-header.tsx              # Repo metadata (avatar, stars, forks, topics, links)
+│       ├── stats-cards.tsx              # KPI cards: stars/forks/issues with sparkline growth
+│       ├── star-growth-chart.tsx        # recharts LineChart — star count over time
+│       ├── fork-trend-chart.tsx         # recharts LineChart — fork count over time (≥2 snapshots)
 │       ├── readme-viewer.tsx            # Markdown README renderer
 │       ├── trend-chart.tsx              # Snapshot history table (daily/weekly/monthly/all tabs)
 │       └── repo-detail-skeleton.tsx     # Loading skeleton
@@ -101,7 +107,7 @@ src/
 └── middleware.ts                        # Combined: Supabase session refresh + next-intl routing
 components.json                          # shadcn/ui configuration
 supabase-schema.sql                      # Database table definitions + RLS policies + migrations
-vercel.json                              # Vercel Cron Job config (daily trending fetch at UTC+0 midnight)
+vercel.json                              # Vercel Cron Job config (two cron jobs at UTC midnight + 1am)
 ```
 
 ## Architecture Notes
@@ -118,12 +124,19 @@ The home page (`src/app/[locale]/page.tsx`) follows the RSC (React Server Compon
 
 ### Repo Detail Page
 
-`src/app/[locale]/repo/[owner]/[repo]/page.tsx` — individual repository view:
+`src/app/[locale]/repo/[owner]/[repo]/page.tsx` — individual repository view with 6 Suspense sections:
 
-1. Fetches full repo detail via `getRepoDetail(owner, repo)` — includes metadata, README content, and all snapshots
-2. Returns 404 via `notFound()` if repo doesn't exist
-3. Three `<Suspense>` sections: RepoHeader, ReadmeViewer, TrendChart
-4. `generateMetadata()` dynamically sets OG title/description/avatar for social sharing
+1. **RepoHeader** — owner/avatar/stars/forks/issues, topics, external links
+2. **StatsCards** — 4 KPI cards (stars, forks, issues, total star growth) with computed growth sparkline
+3. **StarGrowthChart** — recharts LineChart of stargazers_count across all snapshots (sorted by time)
+4. **ForkTrendChart** — recharts LineChart of forks_count across all snapshots (only rendered when ≥2 snapshots exist)
+5. **ReadmeViewer** — rendered markdown from `readme_content`
+6. **TrendChart** — tabbed table (daily/weekly/monthly/all) of snapshot history
+
+The page also:
+- Returns 404 via `notFound()` if repo doesn't exist
+- Uses `generateMetadata()` to dynamically set OG title/description/avatar for social sharing
+- Each Suspense section has a tailored skeleton fallback (pulsing bars for charts, blank card for README)
 
 ### Sorting Strategy
 
@@ -182,6 +195,8 @@ NEXT_PUBLIC_SITE_URL=               # Site URL for metadata (default: http://loc
 GITHUB_TOKEN=                       # GitHub personal access token (optional, raises rate limit 60→5000 req/h)
 ```
 
+Note: The `secret` query parameter used by Vercel Cron Job API routes is hardcoded as `"vetta_cron_secret_2026"` in each route file — it does not use an environment variable.
+
 ### Vercel Cron Jobs
 
 Configured in `vercel.json` — two independent cron jobs:
@@ -206,7 +221,22 @@ Configured in `vercel.json` — two independent cron jobs:
 | `trending` | `0 0 * * *` (midnight) | Discover trending repos + save metadata + snapshots |
 | `enrich-details` | `0 1 * * *` (1am) | Full refresh: iterate ALL repos, fetch metadata + README |
 
-The separation ensures repos from any source (not just trending) get their READMEs filled, and timing between the two pipelines stays independent. Each API route checks the `secret` query param against `CRON_SECRET` before executing.
+The separation ensures repos from any source (not just trending) get their data filled, and timing between the two pipelines stays independent. Each API route checks the `secret` query param before executing.
+
+### Charts (recharts)
+
+The repo detail page uses **recharts** (`LineChart`) for two time-series visualizations:
+
+- **StarGrowthChart**: LineChart of `stargazers_count` across all `TrendSnapshot` entries, sorted by `fetched_at`. Always displayed.
+- **ForkTrendChart**: LineChart of `forks_count` across all snapshots. Only rendered when ≥2 snapshots exist (single-point charts are meaningless).
+
+Both charts share the same pattern:
+- `ResponsiveContainer` for responsive sizing
+- Custom `formatAxis()` helper for K/M axis labels
+- `CartesianGrid` + `Tooltip` for readability
+- Data is sorted chronologically via `useMemo` before passing to recharts
+
+The `TrendChart` (snapshot history table) is a separate component — it shows raw data in a tabbed table, not a chart.
 
 ## Jobs Pipeline (4-Layer Architecture)
 
@@ -235,10 +265,10 @@ Storage       →  Write to Supabase / JSON file / memory
 
 ```
 GET /api/jobs/trending?secret=...         → executes TrendingJob (discovery + metadata + snapshots)
-GET /api/jobs/enrich-details?secret=...   → executes EnrichDetailsJob (README补抓)
+GET /api/jobs/enrich-details?secret=...   → executes EnrichDetailsJob (全量刷新元数据+README)
 ```
 
-Both API routes follow the same pattern: `force-dynamic`, `nodejs` runtime, secret-based auth. `src/jobs/index.ts` registers both jobs with the global `JobRegistry` singleton on module load.
+Both API routes follow the same pattern: `force-dynamic`, `nodejs` runtime, secret-based auth, 10-minute timeout. `src/jobs/index.ts` registers both jobs with the global `JobRegistry` singleton on module load.
 
 ### TrendingJob Flow (`definitions/trending.job.ts`)
 
@@ -252,11 +282,12 @@ Both API routes follow the same pattern: `force-dynamic`, `nodejs` runtime, secr
 
 ### EnrichDetailsJob Flow (`definitions/enrich-details.job.ts`)
 
-1. Queries `repositories` table for **all** repos
-2. For each repo, fetches **metadata + README in parallel** (2 API calls per repo)
-3. Saves via `repoStorage.saveBatch()` + `readmeStorage.saveBatch()` (upsert)
-4. Runs daily at UTC 1am — ensures all repo data stays fresh regardless of source
-5. Per-repo API calls: `GET /repos/{owner}/{repo}` + `GET /repos/{owner}/{repo}/readme`
+1. Queries `repositories` table for **all** repos (id, owner, repo)
+2. For each repo, fetches **metadata + README in parallel** (2 API calls per repo, concurrency limit of 5)
+3. Collects successful results, logs failures individually (non-fatal — one failing repo doesn't block others)
+4. Saves via `repoStorage.saveBatch()` + `readmeStorage.saveBatch()` (upsert)
+5. Runs daily at UTC 1am — ensures all repo data stays fresh regardless of source
+6. Per-repo API calls: `GET /repos/{owner}/{repo}` + `GET /repos/{owner}/{repo}/readme`
 
 ### Data Storage
 
@@ -319,7 +350,7 @@ app/api/jobs/<new-job>/route.ts     → corresponding API endpoint
 
 ## Notes
 
-- This project is **Vetta** — a Next.js app displaying trending GitHub repositories with daily/weekly/monthly views, language filtering, individual repo detail pages with README rendering, and Supabase-backed data.
+- This project is **Vetta** — a Next.js app displaying trending GitHub repositories with daily/weekly/monthly views, language filtering, individual repo detail pages with README rendering and time-series charts, and Supabase-backed data.
 - All user-facing strings must go through `next-intl` translations, not hardcoded.
 - Keep new pages under `src/app/[locale]/`.
 - Row-Level Security (RLS) should be enforced in Supabase for any data access — the anon key is public.
