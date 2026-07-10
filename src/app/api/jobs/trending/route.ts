@@ -1,10 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { registry } from "@/jobs";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET() {
+const CRON_SECRET = "vetta_cron_secret_2026";
+
+export async function GET(request: NextRequest) {
+  // 仅允许 Vercel Cron 或持有 secret 的请求触发
+  const secret = request.nextUrl.searchParams.get("secret");
+  if (secret !== CRON_SECRET) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const logs: string[] = [];
 
   try {
