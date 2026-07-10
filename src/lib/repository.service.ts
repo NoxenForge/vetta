@@ -94,7 +94,6 @@ export async function getTrendingRepos(
     `,
     )
     .eq("since", filters.since)
-    .order("repositories.stargazers_count", { ascending: false })
     .limit(50);
 
   if (filters.language) {
@@ -109,7 +108,12 @@ export async function getTrendingRepos(
 
   if (!data || data.length === 0) return [];
 
-  return (data as unknown as SnapshotRow[]).map(mapRow);
+  const repos = (data as unknown as SnapshotRow[]).map(mapRow);
+
+  // 按 star 数量降序排列（Supabase 不支持按 join 表的字段排序）
+  repos.sort((a, b) => b.stargazers_count - a.stargazers_count);
+
+  return repos;
 }
 
 /**
