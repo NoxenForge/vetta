@@ -1,5 +1,5 @@
--- GitHub Insight 数据表
--- PK: GitHub 不可变仓库 ID (id)，无跨表冗余字段
+-- Vetta 数据表
+-- 每张表均含 created_at / updated_at (TIMESTAMPTZ, 带时区)
 
 CREATE TABLE IF NOT EXISTS repositories (
   id                  BIGINT PRIMARY KEY,
@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS repositories (
   default_branch      TEXT NOT NULL DEFAULT 'main',
   archived            BOOLEAN NOT NULL DEFAULT FALSE,
   fork                BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at          TIMESTAMPTZ,
-  updated_at          TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   pushed_at           TIMESTAMPTZ,
   stargazers_count    INTEGER NOT NULL DEFAULT 0,
   forks_count         INTEGER NOT NULL DEFAULT 0,
@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS trending_snapshots (
   forks_count         INTEGER NOT NULL DEFAULT 0,
   open_issues_count   INTEGER NOT NULL DEFAULT 0,
   fetched_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (repo_id, since)
 );
 
@@ -39,7 +41,9 @@ CREATE TABLE IF NOT EXISTS readmes (
   repo_id             BIGINT PRIMARY KEY REFERENCES repositories(id) ON DELETE CASCADE,
   content             TEXT NOT NULL,
   size_bytes          INTEGER NOT NULL DEFAULT 0,
-  fetched_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  fetched_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_repos_full_name ON repositories(full_name);
@@ -55,3 +59,21 @@ ALTER TABLE readmes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "public_read" ON repositories FOR SELECT TO anon USING (true);
 CREATE POLICY "public_read" ON trending_snapshots FOR SELECT TO anon USING (true);
 CREATE POLICY "public_read" ON readmes FOR SELECT TO anon USING (true);
+
+-- ============================================================
+-- 迁移：为已有表补充 TIMESTAMPTZ 字段
+-- ============================================================
+
+ALTER TABLE trending_snapshots
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE readmes
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE repositories
+  ALTER COLUMN created_at SET NOT NULL,
+  ALTER COLUMN created_at SET DEFAULT NOW(),
+  ALTER COLUMN updated_at SET NOT NULL,
+  ALTER COLUMN updated_at SET DEFAULT NOW();
