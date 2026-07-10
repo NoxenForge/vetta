@@ -4,6 +4,8 @@ import "./[locale]/globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "next-themes";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -44,6 +46,8 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <Analytics />
+          <SpeedInsights />
         </ThemeProvider>
       </body>
     </html>

@@ -33,3 +33,4 @@ next-env.d.ts
 
 # data (local JSON storage for job output)
 /data/
+.vercel
