@@ -2,10 +2,17 @@ import { createClient } from "@supabase/supabase-js";
 import type { Job, JobContext } from "@/jobs/scheduler/types";
 import { repositoryFetcher } from "@/jobs/fetcher/repository";
 import { readmeFetcher } from "@/jobs/fetcher/readme";
-import type { Repository, Readme } from "@/jobs/fetcher/types";
+import { commitParticipationFetcher } from "@/jobs/fetcher/commit-participation";
+import { releaseSummaryFetcher } from "@/jobs/fetcher/release-summary";
+import { contributorCountFetcher } from "@/jobs/fetcher/contributor-count";
+import type {
+  Repository,
+  Readme,
+} from "@/jobs/fetcher/types";
 import { repoStorage, readmeStorage } from "@/jobs/storage/supabase";
 
 const MAX_CONCURRENCY = 5;
+const REPOS_TABLE = "repositories";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -76,13 +83,21 @@ export const enrichDetailsJob: Job = {
 
     ctx.log(`[EnrichDetails] 共 ${allRepos.length} 个仓库待刷新`);
 
-    // 2. 并发刷新每个仓库（元数据 + README 并行）
+    // 2. 并发刷新每个仓库（元数据 + README + 工程指标 并行）
     let successMeta = 0;
-    let failMeta = 0;
     let successReadme = 0;
-    let failReadme = 0;
+    let successCommit = 0;
+    let successRelease = 0;
+    let successContrib = 0;
     const allMetaResults: Repository[] = [];
     const allReadmeResults: Readme[] = [];
+    const metricsRows: {
+      id: number;
+      commit_activity?: number[];
+      contributor_count?: number;
+      release_count?: number;
+      latest_release_at?: string | null;
+    }[] = [];
 
     const results = await mapWithConcurrency(
       allRepos,
@@ -91,29 +106,40 @@ export const enrichDetailsJob: Job = {
           `[EnrichDetails] #${index + 1}/${allRepos.length} ${repo.owner}/${repo.repo}`,
         );
 
-        // 并行抓取元数据和 README
-        const [metaResult, readmeResult] = await Promise.allSettled([
-          repositoryFetcher.fetch(repo.owner, repo.repo, ctx),
-          readmeFetcher.fetch(repo.owner, repo.repo, ctx),
-        ]);
+        // 并行抓取：元数据 + README + Commit 活跃度 + Release + 贡献者
+        const [metaResult, readmeResult, commitResult, releaseResult, contribResult] =
+          await Promise.allSettled([
+            repositoryFetcher.fetch(repo.owner, repo.repo, ctx),
+            readmeFetcher.fetch(repo.owner, repo.repo, ctx),
+            commitParticipationFetcher.fetch(repo.owner, repo.repo, ctx),
+            releaseSummaryFetcher.fetch(repo.owner, repo.repo, ctx),
+            contributorCountFetcher.fetch(repo.owner, repo.repo, ctx),
+          ]);
 
-        if (metaResult.status === "fulfilled") {
-          successMeta++;
-        } else {
-          failMeta++;
-          ctx.log(
-            `[EnrichDetails] 元数据失败 ${repo.owner}/${repo.repo}: ${metaResult.reason instanceof Error ? metaResult.reason.message : String(metaResult.reason)}`,
-          );
-        }
+        if (metaResult.status === "fulfilled") successMeta++;
+        else ctx.log(
+          `[EnrichDetails] 元数据失败 ${repo.owner}/${repo.repo}: ${metaResult.reason instanceof Error ? metaResult.reason.message : String(metaResult.reason)}`,
+        );
 
-        if (readmeResult.status === "fulfilled") {
-          successReadme++;
-        } else {
-          failReadme++;
-          ctx.log(
-            `[EnrichDetails] README 失败 ${repo.owner}/${repo.repo}: ${readmeResult.reason instanceof Error ? readmeResult.reason.message : String(readmeResult.reason)}`,
-          );
-        }
+        if (readmeResult.status === "fulfilled") successReadme++;
+        else ctx.log(
+          `[EnrichDetails] README 失败 ${repo.owner}/${repo.repo}: ${readmeResult.reason instanceof Error ? readmeResult.reason.message : String(readmeResult.reason)}`,
+        );
+
+        if (commitResult.status === "fulfilled") successCommit++;
+        else ctx.log(
+          `[EnrichDetails] Commit 失败 ${repo.owner}/${repo.repo}: ${commitResult.reason instanceof Error ? commitResult.reason.message : String(commitResult.reason)}`,
+        );
+
+        if (releaseResult.status === "fulfilled") successRelease++;
+        else ctx.log(
+          `[EnrichDetails] Release 失败 ${repo.owner}/${repo.repo}: ${releaseResult.reason instanceof Error ? releaseResult.reason.message : String(releaseResult.reason)}`,
+        );
+
+        if (contribResult.status === "fulfilled") successContrib++;
+        else ctx.log(
+          `[EnrichDetails] 贡献者 失败 ${repo.owner}/${repo.repo}: ${contribResult.reason instanceof Error ? contribResult.reason.message : String(contribResult.reason)}`,
+        );
 
         return {
           index,
@@ -122,24 +148,78 @@ export const enrichDetailsJob: Job = {
             readmeResult.status === "fulfilled"
               ? { ...readmeResult.value, repo_id: repo.id }
               : null,
+          commit:
+            commitResult.status === "fulfilled"
+              ? { ...commitResult.value, repo_id: repo.id }
+              : null,
+          release:
+            releaseResult.status === "fulfilled"
+              ? { ...releaseResult.value, repo_id: repo.id }
+              : null,
+          contrib:
+            contribResult.status === "fulfilled"
+              ? { ...contribResult.value, repo_id: repo.id }
+              : null,
         };
       },
       MAX_CONCURRENCY,
     );
 
     for (const r of results) {
-      if (r.meta) allMetaResults.push(r.meta);
+      if (r.meta) {
+        allMetaResults.push(r.meta);
+        // 收集工程指标数据（等 schema 迁移后再写入）
+        if (r.commit || r.release || r.contrib) {
+          metricsRows.push({
+            id: r.meta.id,
+            commit_activity: r.commit?.all ?? undefined,
+            contributor_count: r.contrib?.contributor_count ?? undefined,
+            release_count: r.release?.release_count ?? undefined,
+            latest_release_at: r.release?.latest_release_at ?? undefined,
+          });
+        }
+      }
       if (r.readme) allReadmeResults.push(r.readme);
     }
 
     ctx.log(
-      `[EnrichDetails] 抓取完成: 元数据 ${successMeta}/${allRepos.length} 成功, README ${successReadme}/${allRepos.length} 成功`,
+      `[EnrichDetails] 抓取完成: 元数据 ${successMeta}/${allRepos.length}, README ${successReadme}/${allRepos.length}, Commit ${successCommit}/${allRepos.length}, Release ${successRelease}/${allRepos.length}, 贡献者 ${successContrib}/${allRepos.length}`,
     );
 
     // 3. 存储
     if (allMetaResults.length > 0) {
       await repoStorage.saveBatch(allMetaResults);
       ctx.log(`[EnrichDetails] 已刷新 ${allMetaResults.length} 条仓库元数据`);
+    }
+
+    if (metricsRows.length > 0) {
+      // 逐行 update 指标列（upsert 会要求所有 NOT NULL 列，update 只改指定列）
+      const supabase = getSupabase();
+      let metricsWritten = 0;
+      const updatePromises = metricsRows.map((row) =>
+        supabase
+          .from(REPOS_TABLE)
+          .update({
+            commit_activity: row.commit_activity ?? null,
+            contributor_count: row.contributor_count ?? null,
+            release_count: row.release_count ?? null,
+            latest_release_at: row.latest_release_at ?? null,
+          })
+          .eq("id", row.id)
+          .then(({ error }) => {
+            if (error) {
+              ctx.log(
+                `[EnrichDetails] 指标 update id=${row.id} 失败: ${error.message}`,
+              );
+            } else {
+              metricsWritten++;
+            }
+          }),
+      );
+      await Promise.all(updatePromises);
+      if (metricsWritten > 0) {
+        ctx.log(`[EnrichDetails] 已刷新 ${metricsWritten} 条工程指标`);
+      }
     }
 
     if (allReadmeResults.length > 0) {

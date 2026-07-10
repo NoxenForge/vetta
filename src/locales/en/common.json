@@ -73,7 +73,14 @@
     "starGrowthChart": "Star Growth",
     "forkTrendChart": "Fork Trend",
     "notEnoughData": "Not enough data for trend chart.",
-    "allTab": "All"
+    "allTab": "All",
+    "statsContributors": "Contributors",
+    "statsReleases": "Releases",
+    "metricsRadar": "Project Health",
+    "metricsCommitPulse": "Commit Pulse",
+    "metricsNotEnoughData": "Metrics data not yet available.",
+    "metricsOneYearAgo": "1 year ago",
+    "metricsNow": "Now"
   },
   "Header": {
     "title": "Vetta",

@@ -203,6 +203,22 @@ export async function getRepoDetail(
     forks_count: repoRow.forks_count,
     open_issues_count: repoRow.open_issues_count,
     fetched_at: repoRow.fetched_at,
+    commit_activity:
+      repoRow.commit_activity && typeof repoRow.commit_activity === "object"
+        ? (repoRow.commit_activity as { all?: number[] }).all ?? null
+        : null,
+    contributor_count:
+      typeof repoRow.contributor_count === "number"
+        ? repoRow.contributor_count
+        : null,
+    release_count:
+      typeof repoRow.release_count === "number"
+        ? repoRow.release_count
+        : null,
+    latest_release_at:
+      typeof repoRow.latest_release_at === "string"
+        ? repoRow.latest_release_at
+        : null,
     readme_content: readmeRow?.content ?? null,
     readme_size_bytes: readmeRow?.size_bytes ?? null,
     readme_fetched_at: readmeRow?.fetched_at ?? null,

@@ -2,7 +2,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Star, GitFork, CircleDot, TrendingUp } from "lucide-react";
+import { Star, GitFork, CircleDot, TrendingUp, Users, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RepoDetail, TrendSnapshot } from "@/types/ui";
 
@@ -112,10 +112,22 @@ export function StatsCards({ detail }: StatsCardsProps) {
       growth: true,
       data: null,
     },
+    {
+      icon: Users,
+      value: detail.contributor_count ?? 0,
+      label: t("statsContributors"),
+      data: null,
+    },
+    {
+      icon: Package,
+      value: detail.release_count ?? 0,
+      label: t("statsReleases"),
+      data: null,
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       {cards.map((card) => (
         <div
           key={card.label}

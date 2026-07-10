@@ -57,3 +57,36 @@ export interface Readme {
 }
 
 export const readmeKey = (r: Readme): string => String(r.repo_id);
+
+// ── 工程指标（Metrics Dashboard）────────────────────────
+
+/** Commit 活跃度（52 周数组） */
+export interface CommitParticipation {
+  repo_id: number;
+  all: number[];
+  fetched_at: string;
+}
+
+export const commitParticipationKey = (c: CommitParticipation): string =>
+  String(c.repo_id);
+
+/** Release 摘要 */
+export interface ReleaseSummary {
+  repo_id: number;
+  release_count: number;
+  latest_release_at: string | null;
+  fetched_at: string;
+}
+
+export const releaseSummaryKey = (r: ReleaseSummary): string =>
+  String(r.repo_id);
+
+/** 贡献者总数 */
+export interface ContributorCount {
+  repo_id: number;
+  contributor_count: number;
+  fetched_at: string;
+}
+
+export const contributorCountKey = (c: ContributorCount): string =>
+  String(c.repo_id);

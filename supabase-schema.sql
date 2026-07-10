@@ -77,3 +77,13 @@ ALTER TABLE repositories
   ALTER COLUMN created_at SET DEFAULT NOW(),
   ALTER COLUMN updated_at SET NOT NULL,
   ALTER COLUMN updated_at SET DEFAULT NOW();
+
+-- ============================================================
+-- 迁移：Metrics Dashboard 工程指标字段
+-- ============================================================
+
+ALTER TABLE repositories
+  ADD COLUMN IF NOT EXISTS commit_activity JSONB,
+  ADD COLUMN IF NOT EXISTS contributor_count INTEGER,
+  ADD COLUMN IF NOT EXISTS release_count INTEGER,
+  ADD COLUMN IF NOT EXISTS latest_release_at TIMESTAMPTZ;

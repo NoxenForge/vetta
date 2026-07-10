@@ -33,6 +33,12 @@ export interface RepoDetail {
   forks_count: number;
   open_issues_count: number;
   fetched_at: string;
+  // ── 工程指标 ──
+  commit_activity: number[] | null;
+  contributor_count: number | null;
+  release_count: number | null;
+  latest_release_at: string | null;
+  // ── README ──
   readme_content: string | null;
   readme_size_bytes: number | null;
   readme_fetched_at: string | null;

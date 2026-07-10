@@ -73,7 +73,14 @@
     "starGrowthChart": "星数增长",
     "forkTrendChart": "复刻趋势",
     "notEnoughData": "数据不足，无法显示趋势图。",
-    "allTab": "全部"
+    "allTab": "全部",
+    "statsContributors": "贡献者",
+    "statsReleases": "版本发布",
+    "metricsRadar": "项目健康度",
+    "metricsCommitPulse": "提交活跃度",
+    "metricsNotEnoughData": "暂无工程指标数据。",
+    "metricsOneYearAgo": "1 年前",
+    "metricsNow": "现在"
   },
   "Header": {
     "title": "Vetta 趋势",

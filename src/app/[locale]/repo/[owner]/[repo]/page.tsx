@@ -6,6 +6,7 @@ import { RepoHeader } from "@/components/repo/repo-header";
 import { StatsCards } from "@/components/repo/stats-cards";
 import { StarGrowthChart } from "@/components/repo/star-growth-chart";
 import { ForkTrendChart } from "@/components/repo/fork-trend-chart";
+import { MetricsDashboard } from "@/components/repo/metrics-dashboard";
 import { ReadmeViewer } from "@/components/repo/readme-viewer";
 import { TrendChart } from "@/components/repo/trend-chart";
 
@@ -87,7 +88,18 @@ export default async function RepoDetailPage({ params }: PageProps) {
           </Suspense>
         )}
 
-        {/* 5. README */}
+        {/* 5. Metrics Dashboard（工程指标） */}
+        <Suspense
+          fallback={
+            <div className="rounded-lg border bg-card p-8">
+              <div className="h-4 w-32 rounded-md bg-muted animate-pulse" />
+            </div>
+          }
+        >
+          <MetricsDashboard detail={detail} />
+        </Suspense>
+
+        {/* 6. README（Markdown 渲染） */}
         <Suspense
           fallback={
             <div className="rounded-lg border bg-card p-8">
@@ -103,7 +115,7 @@ export default async function RepoDetailPage({ params }: PageProps) {
           />
         </Suspense>
 
-        {/* 6. 趋势历史表 */}
+        {/* 7. 趋势历史表 */}
         <Suspense
           fallback={
             <div className="rounded-lg border bg-card p-8">

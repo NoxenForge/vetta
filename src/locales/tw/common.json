@@ -73,7 +73,14 @@
     "starGrowthChart": "星數增長",
     "forkTrendChart": "復刻趨勢",
     "notEnoughData": "資料不足，無法顯示趨勢圖。",
-    "allTab": "全部"
+    "allTab": "全部",
+    "statsContributors": "貢獻者",
+    "statsReleases": "版本發布",
+    "metricsRadar": "專案健康度",
+    "metricsCommitPulse": "提交活躍度",
+    "metricsNotEnoughData": "尚無工程指標資料。",
+    "metricsOneYearAgo": "1 年前",
+    "metricsNow": "現在"
   },
   "Header": {
     "title": "GitHub 趨勢情報",
