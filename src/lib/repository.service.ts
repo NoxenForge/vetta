@@ -94,7 +94,7 @@ export async function getTrendingRepos(
     `,
     )
     .eq("since", filters.since)
-    .order("rank", { ascending: true })
+    .order("repositories.stargazers_count", { ascending: false })
     .limit(50);
 
   if (filters.language) {

@@ -86,14 +86,6 @@ export async function RepositoryCard({ repo }: RepositoryCardProps) {
       rel="noopener noreferrer"
       className="group relative flex flex-col rounded-lg border bg-card p-4 transition-all hover:border-primary/40 hover:shadow-sm"
     >
-      {/* Rank badge */}
-      <span
-        className="absolute -left-2.5 -top-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-mono font-bold text-primary-foreground shadow-sm"
-        aria-label={t("rank", { rank: repo.rank })}
-      >
-        {repo.rank}
-      </span>
-
       {/* Header: avatar + name */}
       <div className="flex items-start gap-3">
         <Image

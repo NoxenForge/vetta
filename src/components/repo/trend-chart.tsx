@@ -68,9 +68,6 @@ export function TrendChart({ snapshots }: TrendChartProps) {
                 {t("snapshotDate")}
               </th>
               <th className="text-right px-6 py-2 font-medium text-muted-foreground">
-                {t("rank")}
-              </th>
-              <th className="text-right px-6 py-2 font-medium text-muted-foreground">
                 {t("snapshotStars")}
               </th>
               <th className="text-right px-6 py-2 font-medium text-muted-foreground hidden sm:table-cell">
@@ -93,16 +90,6 @@ export function TrendChart({ snapshots }: TrendChartProps) {
                     month: "short",
                     day: "numeric",
                   })}
-                </td>
-                <td className="px-6 py-2 text-right font-mono tabular-nums">
-                  <span
-                    className={cn(
-                      "inline-flex items-center justify-center min-w-[2rem] rounded px-1.5 py-0.5",
-                      s.rank <= 5 && "bg-primary/10 text-primary font-semibold",
-                    )}
-                  >
-                    #{s.rank}
-                  </span>
                 </td>
                 <td className="px-6 py-2 text-right font-mono tabular-nums">
                   {s.stargazers_count.toLocaleString()}
