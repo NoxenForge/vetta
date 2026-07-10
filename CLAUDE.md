@@ -210,7 +210,7 @@ Configured in `vercel.json` — two independent cron jobs:
     },
     {
       "path": "/api/jobs/enrich-details?secret=vetta_cron_secret_2026",
-      "schedule": "0 1 * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }
@@ -219,7 +219,7 @@ Configured in `vercel.json` — two independent cron jobs:
 | Job | Schedule (UTC) | Purpose |
 |-----|---------------|---------|
 | `trending` | `0 0 * * *` (midnight) | Discover trending repos + save metadata + snapshots |
-| `enrich-details` | `0 1 * * *` (1am) | Full refresh: iterate ALL repos, fetch metadata + README |
+| `enrich-details` | `0 * * * *` (hourly) | Full refresh: iterate ALL repos, fetch metadata + README |
 
 The separation ensures repos from any source (not just trending) get their data filled, and timing between the two pipelines stays independent. Each API route checks the `secret` query param before executing.
 
@@ -286,7 +286,7 @@ Both API routes follow the same pattern: `force-dynamic`, `nodejs` runtime, secr
 2. For each repo, fetches **metadata + README in parallel** (2 API calls per repo, concurrency limit of 5)
 3. Collects successful results, logs failures individually (non-fatal — one failing repo doesn't block others)
 4. Saves via `repoStorage.saveBatch()` + `readmeStorage.saveBatch()` (upsert)
-5. Runs daily at UTC 1am — ensures all repo data stays fresh regardless of source
+5. Runs hourly — ensures all repo data stays fresh regardless of source
 6. Per-repo API calls: `GET /repos/{owner}/{repo}` + `GET /repos/{owner}/{repo}/readme`
 
 ### Data Storage
