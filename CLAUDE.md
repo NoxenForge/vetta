@@ -224,7 +224,7 @@ app/api/jobs/<new-job>/route.ts     → corresponding API endpoint
 
 ## Notes
 
-- This project is **GitHub Trending Intelligence** — a Next.js app displaying trending GitHub repositories with daily/weekly/monthly views, language filtering, and Supabase-backed data.
+- This project is **Vetta** — a Next.js app displaying trending GitHub repositories with daily/weekly/monthly views, language filtering, and Supabase-backed data.
 - All user-facing strings must go through `next-intl` translations, not hardcoded.
 - Keep new pages under `src/app/[locale]/`.
 - Row-Level Security (RLS) should be enforced in Supabase for any data access — the anon key is public.

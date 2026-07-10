@@ -1,4 +1,4 @@
-# i18n Starter
+# Vetta
 
 A minimal Next.js starter with multi-language support via next-intl.
 

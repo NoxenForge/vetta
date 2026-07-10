@@ -68,7 +68,7 @@
     "monthly": "本月"
   },
   "Header": {
-    "title": "GitHub 趋势情报",
+    "title": "Vetta 趋势",
     "home": "首页",
     "privacy": "隐私",
     "terms": "条款",
@@ -84,13 +84,13 @@
     "terms": "服务条款",
     "contact": "联系",
     "github": "GitHub",
-    "dataSource": "数据来源于 GitHub Trending",
-    "copyright": "© {year} GitHub Trending Intelligence。保留所有权利。"
+    "dataSource": "数据来源于 GitHub",
+    "copyright": "© {year} Vetta。保留所有权利。"
   },
   "Privacy": {
     "title": "隐私政策",
     "lastUpdated": "最后更新：2026 年 7 月 5 日",
-    "intro": "GitHub Trending Intelligence（以下简称「我们」）致力于保护您的隐私。本隐私政策说明了我们在您访问网站时如何收集、使用和保护您的信息。",
+    "intro": "Vetta（以下简称「我们」）致力于保护您的隐私。本隐私政策说明了我们在您访问网站时如何收集、使用和保护您的信息。",
     "infoWeCollect": "我们收集的信息",
     "infoWeCollectDesc": "我们不直接收集任何个人信息。我们的网站展示来自 GitHub API 的公开数据。我们可能会通过标准服务器日志收集匿名使用数据，包括 IP 地址、浏览器类型和访问页面，用于分析目的。",
     "cookies": "Cookie",
@@ -109,9 +109,9 @@
   "Terms": {
     "title": "服务条款",
     "lastUpdated": "最后更新：2026 年 7 月 5 日",
-    "intro": "访问和使用 GitHub Trending Intelligence（「本服务」），即表示您同意受本服务条款的约束。如果您不同意，请勿使用本服务。",
+    "intro": "访问和使用 Vetta（「本服务」），即表示您同意受本服务条款的约束。如果您不同意，请勿使用本服务。",
     "description": "服务描述",
-    "descriptionDesc": "GitHub Trending Intelligence 是一个免费的 Web 应用程序，展示来自 GitHub 的热门开源仓库。所有显示的数据均通过 GitHub API 公开获取。",
+    "descriptionDesc": "Vetta 是一个免费的 Web 应用程序，展示来自 GitHub 的热门开源仓库。所有显示的数据均通过 GitHub API 公开获取。",
     "useOfService": "服务使用",
     "useOfServiceDesc": "您可以将本服务用于个人和商业目的。您同意不滥用本服务，包括试图中断、过载或未经授权访问我们的系统。",
     "intellectualProperty": "知识产权",

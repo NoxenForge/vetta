@@ -17,12 +17,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "Repository not found" };
   }
   const description =
-    detail.description || `${detail.full_name} - View on GitHub Trending Intelligence`;
+    detail.description || `${detail.full_name} - View on Vetta`;
   return {
     title: `${detail.full_name}`,
     description,
     openGraph: {
-      title: `${detail.full_name} — GitHub Trending Intelligence`,
+      title: `${detail.full_name} — Vetta`,
       description,
       images: [{ url: detail.avatar_url }],
     },

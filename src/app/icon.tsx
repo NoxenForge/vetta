@@ -19,7 +19,7 @@ export default function Icon() {
         borderRadius: "50%",
       }}
     >
-      G
+      V
     </div>,
     { width: 32, height: 32 },
   );

@@ -84,13 +84,13 @@
     "terms": "服務條款",
     "contact": "聯絡",
     "github": "GitHub",
-    "dataSource": "資料來源於 GitHub Trending",
-    "copyright": "© {year} GitHub Trending Intelligence。保留所有權利。"
+    "dataSource": "資料來源於 GitHub",
+    "copyright": "© {year} Vetta。保留所有權利。"
   },
   "Privacy": {
     "title": "隱私政策",
     "lastUpdated": "最後更新：2026 年 7 月 5 日",
-    "intro": "GitHub Trending Intelligence（以下簡稱「我們」）致力於保護您的隱私。本隱私政策說明了我們在您存取網站時如何收集、使用和保護您的資訊。",
+    "intro": "Vetta（以下簡稱「我們」）致力於保護您的隱私。本隱私政策說明了我們在您存取網站時如何收集、使用和保護您的資訊。",
     "infoWeCollect": "我們收集的資訊",
     "infoWeCollectDesc": "我們不直接收集任何個人資訊。我們的網站展示來自 GitHub API 的公開資料。我們可能會透過標準伺服器日誌收集匿名使用資料，包括 IP 位址、瀏覽器類型和存取頁面，用於分析目的。",
     "cookies": "Cookie",
@@ -109,9 +109,9 @@
   "Terms": {
     "title": "服務條款",
     "lastUpdated": "最後更新：2026 年 7 月 5 日",
-    "intro": "存取和使用 GitHub Trending Intelligence（「本服務」），即表示您同意受本服務條款的約束。如果您不同意，請勿使用本服務。",
+    "intro": "存取和使用 Vetta（「本服務」），即表示您同意受本服務條款的約束。如果您不同意，請勿使用本服務。",
     "description": "服務描述",
-    "descriptionDesc": "GitHub Trending Intelligence 是一個免費的 Web 應用程式，展示來自 GitHub 的熱門開源倉庫。所有顯示的資料均透過 GitHub API 公開獲取。",
+    "descriptionDesc": "Vetta 是一個免費的 Web 應用程式，展示來自 GitHub 的熱門開源倉庫。所有顯示的資料均透過 GitHub API 公開獲取。",
     "useOfService": "服務使用",
     "useOfServiceDesc": "您可以將本服務用於個人和商業目的。您同意不濫用本服務，包括試圖中斷、過載或未經授權存取我們的系統。",
     "intellectualProperty": "智慧財產權",

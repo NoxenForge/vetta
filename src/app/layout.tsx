@@ -9,8 +9,8 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: {
-    default: "GitHub Trending Intelligence",
-    template: "%s — GitHub Trending Intelligence",
+    default: "Vetta",
+    template: "%s — Vetta",
   },
   description:
     "Discover trending open-source repositories on GitHub. Track daily, weekly, and monthly rankings with real-time metrics.",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:4000",
   ),
   openGraph: {
-    title: "GitHub Trending Intelligence",
+    title: "Vetta",
     description:
       "Discover trending open-source repositories on GitHub with real-time metrics.",
     type: "website",

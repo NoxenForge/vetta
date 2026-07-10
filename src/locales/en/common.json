@@ -4,7 +4,7 @@
     "description": "Welcome to the i18n starter"
   },
   "Trending": {
-    "title": "GitHub Trending",
+    "title": "Vetta",
     "subtitle": "Discover {count} trending repositories",
     "subtitleDaily": "Discover {count} trending repositories today",
     "subtitleWeekly": "Discover {count} trending repositories this week",
@@ -68,7 +68,7 @@
     "monthly": "Monthly"
   },
   "Header": {
-    "title": "GitHub Trending Intelligence",
+    "title": "Vetta",
     "home": "Home",
     "privacy": "Privacy",
     "terms": "Terms",
@@ -84,13 +84,13 @@
     "terms": "Terms of Service",
     "contact": "Contact",
     "github": "GitHub",
-    "dataSource": "Data sourced from GitHub Trending",
-    "copyright": "© {year} GitHub Trending Intelligence. All rights reserved."
+    "dataSource": "Data sourced from GitHub",
+    "copyright": "© {year} Vetta. All rights reserved."
   },
   "Privacy": {
     "title": "Privacy Policy",
     "lastUpdated": "Last updated: July 5, 2026",
-    "intro": "GitHub Trending Intelligence (\"we\", \"our\", or \"us\") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you visit our website.",
+    "intro": "Vetta (\"we\", \"our\", or \"us\") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you visit our website.",
     "infoWeCollect": "Information We Collect",
     "infoWeCollectDesc": "We do not collect any personal information directly. Our website displays publicly available data from the GitHub API. We may collect anonymous usage data through standard server logs, including IP addresses, browser types, and pages visited for analytics purposes.",
     "cookies": "Cookies",
@@ -109,9 +109,9 @@
   "Terms": {
     "title": "Terms of Service",
     "lastUpdated": "Last updated: July 5, 2026",
-    "intro": "By accessing and using GitHub Trending Intelligence (\"the Service\"), you agree to be bound by these Terms of Service. If you do not agree, please do not use the Service.",
+    "intro": "By accessing and using Vetta (\"the Service\"), you agree to be bound by these Terms of Service. If you do not agree, please do not use the Service.",
     "description": "Description of Service",
-    "descriptionDesc": "GitHub Trending Intelligence is a free web application that displays trending open-source repositories from GitHub. All data displayed is publicly available through the GitHub API.",
+    "descriptionDesc": "Vetta is a free web application that displays trending open-source repositories from GitHub. All data displayed is publicly available through the GitHub API.",
     "useOfService": "Use of the Service",
     "useOfServiceDesc": "You may use the Service for personal and commercial purposes. You agree not to misuse the Service, including attempting to disrupt, overload, or gain unauthorized access to our systems.",
     "intellectualProperty": "Intellectual Property",

@@ -23,7 +23,7 @@ export async function Footer() {
               className="flex items-center gap-2 font-semibold text-foreground"
             >
               <Code2 className="h-5 w-5" />
-              <span>GitHub Trending Intelligence</span>
+              <span>Vetta</span>
             </Link>
             <p className="text-sm text-muted-foreground max-w-xs">
               {t("tagline")}
