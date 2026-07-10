@@ -14,7 +14,10 @@ npm run lint     # ESLint (next lint)
 ## Stack
 
 - **Framework:** Next.js 15 (App Router) with Turbopack
-- **UI:** React 19, TailwindCSS v4
+- **UI:** React 19, TailwindCSS v4, **shadcn/ui** (base-nova style, neutral base), **Base UI** (headless primitives)
+- **Styling:** `class-variance-authority` (component variants), `clsx` + `tailwind-merge` (class merging via `cn()`)
+- **Icons:** lucide-react
+- **Theme:** `next-themes` — dark/light mode with CSS custom properties in `globals.css`
 - **Language:** TypeScript 5 (strict mode)
 - **i18n:** next-intl v4 — `[locale]` prefix routing (en / zh / tw), `as-needed` mode (default locale has no prefix)
 - **Auth/DB:** Supabase (`@supabase/ssr` + `@supabase/supabase-js`) — session-based auth with cookie management in middleware
@@ -25,31 +28,81 @@ npm run lint     # ESLint (next lint)
 ```
 src/
 ├── app/
-│   ├── layout.tsx            # Root layout (redirects to default locale)
-│   ├── not-found.tsx         # Global 404
-│   ├── api/jobs/trending/    # GET /api/jobs/trending → 触发完整管线
+│   ├── layout.tsx                    # Root layout (redirects to default locale)
+│   ├── not-found.tsx                 # Global 404
+│   ├── api/jobs/trending/route.ts    # GET /api/jobs/trending → triggers full pipeline
 │   └── [locale]/
-│       ├── layout.tsx        # Locale layout (fonts, i18n provider)
-│       ├── page.tsx          # Home page
-│       └── globals.css       # Tailwind + custom styles
+│       ├── layout.tsx                # Locale layout (fonts, i18n provider)
+│       ├── page.tsx                  # Home page — GitHub Trending (Server Component)
+│       ├── loading.tsx               # Route-level loading skeleton
+│       ├── error.tsx                 # Route-level error boundary
+│       └── globals.css               # Tailwind + shadcn CSS variables + theme tokens
+├── components/
+│   ├── ui/                           # shadcn/ui primitives (Button, Badge, Skeleton)
+│   └── trending/                     # Feature components for the trending page
+│       ├── trending-header.tsx       # Page heading + time range selector
+│       ├── language-filter.tsx       # Programming language filter bar
+│       ├── repository-grid.tsx       # Responsive card grid
+│       ├── repository-card.tsx       # Individual repo card
+│       ├── repository-card-skeleton.tsx  # Loading placeholder
+│       └── time-range-selector.tsx   # daily/weekly/monthly toggle
+├── lib/
+│   ├── utils.ts                      # cn() helper (clsx + tailwind-merge)
+│   └── repository.service.ts         # Data fetching: getTrendingRepos(), getAvailableLanguages()
+├── types/
+│   └── ui.ts                         # TrendingRepo, TrendingFilters, TimeRange
 ├── i18n/
-│   ├── request.ts            # next-intl config (server-side)
-│   └── routing.ts            # Locale routing + Link/redirect/usePathname helpers
+│   ├── request.ts                    # next-intl config (server-side)
+│   └── routing.ts                    # Locale routing + Link/redirect/usePathname helpers
 ├── locales/
 │   ├── en/common.json
 │   ├── zh/common.json
 │   └── tw/common.json
+├── jobs/                             # 4-layer data pipeline (see Jobs Pipeline section)
+│   ├── index.ts                      # Module entry — registers all jobs on import
+│   ├── scheduler/                    # registry.ts (global singleton JobRegistry) + types.ts
+│   ├── discovery/                    # github-trending.ts + types.ts
+│   ├── fetcher/                      # repository.ts, readme.ts + types.ts
+│   ├── storage/                      # supabase.ts, json-file.ts, memory.ts + types.ts
+│   └── definitions/                  # trending.job.ts (composes Discovery + Fetcher + Storage)
 ├── utils/
-│   ├── github-api.ts         # GitHub API 共享客户端（auth、重试、429 处理）
+│   ├── github-api.ts                 # GitHub API shared client (auth, retry, 429 handling)
 │   └── supabase/
-│       ├── client.ts         # Browser client (createBrowserClient)
-│       ├── server.ts         # Server Component client (createServerClient + cookies)
-│       └── middleware.ts     # Middleware client (createServerClient + NextRequest)
-└── middleware.ts             # Combined: Supabase session refresh + next-intl routing
-supabase-schema.sql           # 数据库表定义 + RLS 策略
+│       ├── client.ts                 # Browser client (createBrowserClient)
+│       ├── server.ts                 # Server Component client (createServerClient + cookies)
+│       └── middleware.ts             # Middleware client (createServerClient + NextRequest)
+└── middleware.ts                     # Combined: Supabase session refresh + next-intl routing
+components.json                       # shadcn/ui configuration
+supabase-schema.sql                   # Database table definitions + RLS policies
 ```
 
 ## Architecture Notes
+
+### Page Data Flow
+
+The home page (`src/app/[locale]/page.tsx`) follows the RSC (React Server Component) pattern:
+
+1. Page is an **async Server Component** — fetches data directly, no `useEffect` or client-side fetching
+2. `searchParams` drives `since` (daily/weekly/monthly) and `language` filters from URL query params
+3. `repository.service.ts` queries Supabase via the **anon key** (public read, RLS-enforced)
+4. Two parallel fetches: `getTrendingRepos()` + `getAvailableLanguages()` (no waterfall)
+5. Three `<Suspense>` boundaries provide progressive loading: header → language filter → grid
+
+### Theme System
+
+- Powered by `next-themes` — supports light/dark/system modes
+- CSS custom properties defined in `globals.css` for both `:root` (light) and `.dark` (dark)
+- All colors use the `oklch()` color space
+- shadcn/ui components reference theme tokens (`--primary`, `--background`, `--border`, etc.)
+- The `cn()` utility in `src/lib/utils.ts` merges Tailwind classes without conflicts
+
+### UI Component Architecture
+
+- **shadcn/ui** generates components into `src/components/ui/` via `npx shadcn add`
+- Components use **Base UI** (`@base-ui/react`) as the headless foundation (e.g., `<ButtonPrimitive>`)
+- **CVA** (`class-variance-authority`) defines variant/size APIs: `buttonVariants({ variant: "outline", size: "lg" })`
+- Custom composable components use `useRender` from Base UI for polymorphic rendering
+- Feature components under `components/trending/` are standard React components (no shadcn wrapping needed)
 
 ### Middleware (combined auth + i18n)
 
@@ -77,90 +130,90 @@ All clients use `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE
 ```
 NEXT_PUBLIC_SUPABASE_URL=           # Supabase project URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= # Supabase anon/publishable key
-SUPABASE_SERVICE_ROLE_KEY=          # Supabase service_role key（server-side 写入，绕过 RLS）
+SUPABASE_SERVICE_ROLE_KEY=          # Supabase service_role key (server-side writes, bypasses RLS)
 NEXT_PUBLIC_SITE_URL=               # Site URL for metadata (default: http://localhost:4000)
-GITHUB_TOKEN=                       # GitHub personal access token（可选，提升速率限制 60→5000 req/h）
+GITHUB_TOKEN=                       # GitHub personal access token (optional, raises rate limit 60→5000 req/h)
 ```
 
 ## Jobs Pipeline (4-Layer Architecture)
 
-GitHub 数据抓取采用解耦的 4 层架构，位于 `src/jobs/`：
+GitHub data fetching uses a decoupled 4-layer architecture in `src/jobs/`:
 
 ```
-Scheduler (调度)     →  什么时候抓？
+Scheduler     →  When to fetch?
     ↓
-Discovery (发现)     →  哪些仓库值得抓？
+Discovery     →  Which repos are worth fetching?
     ↓ Candidate[] { owner, repo }
-Fetcher (抓取)       →  向 GitHub API 获取数据
-    ↓ 结构化数据
-Storage (存储)       →  写入 Supabase / JSON 文件 / 内存
+Fetcher       →  Fetch data from GitHub API
+    ↓ structured data
+Storage       →  Write to Supabase / JSON file / memory
 ```
 
-### 各层接口
+### Layer Interfaces
 
-| 层 | 文件 | 核心接口 |
-|----|------|---------|
+| Layer | File | Core Interface |
+|-------|------|---------------|
 | Scheduler | `scheduler/types.ts` | `Job { name, run(ctx) }` |
 | Discovery | `discovery/types.ts` | `Discovery { name, discover(ctx) → Candidate[] }` |
 | Fetcher | `fetcher/types.ts` | `Fetcher<T> { name, fetch(owner, repo, ctx) → T }` |
 | Storage | `storage/types.ts` | `Storage<T> { name, save(data), saveBatch(data[]) }` |
 
-### 触发方式
+### Trigger
 
 ```
-GET /api/jobs/trending    → 执行 TrendingJob（完整管线）
+GET /api/jobs/trending    → executes TrendingJob (full pipeline)
 ```
 
-API 路由在 `src/app/api/jobs/trending/route.ts`，通过 `registry.run("trending", ctx)` 触发。
+The API route is at `src/app/api/jobs/trending/route.ts`. `src/jobs/index.ts` registers the trending job with the global `JobRegistry` singleton on module load; the route triggers it via `registry.run("trending", ctx)`.
 
-### 数据存储
+### Data Storage
 
-- **Supabase**: 主要生产存储，对应三张表 —— `repositories`、`trending_snapshots`、`readmes`（schema 见 `supabase-schema.sql`）。写入使用 `service_role` key 绕过 RLS。
-  - `repoStorage` / `snapStorage` / `readmeStorage` 定义在 `storage/supabase.ts`
-- **JSON 文件**: 备选本地存储（`storage/json-file.ts`），数据写入 `data/` 目录
-  - 支持自定义去重 key（默认按 `full_name`，可传 `getKey` 覆盖）
-- **内存存储**: 测试用（`storage/memory.ts`），`createMemoryStorage()`
-- `data/` 目录已在 `.gitignore` 中排除
+- **Supabase**: Primary production storage, three tables — `repositories`, `trending_snapshots`, `readmes` (schema in `supabase-schema.sql`). Writes use `service_role` key to bypass RLS.
+  - `repoStorage` / `snapStorage` / `readmeStorage` defined in `storage/supabase.ts`
+- **JSON file**: Alternative local storage (`storage/json-file.ts`), writes to `data/` directory
+  - Supports custom dedup key (defaults to `full_name`, overridable via `getKey`)
+- **Memory storage**: For testing (`storage/memory.ts`), `createMemoryStorage()`
+- `data/` directory is excluded in `.gitignore`
 
-### GitHub API 客户端 (`src/utils/github-api.ts`)
+### GitHub API Client (`src/utils/github-api.ts`)
 
-共享模块，所有 Fetcher 通过它发请求：
+Shared module used by all Fetchers:
 
-- `githubFetch(path, options?)` — 封装 auth（`GITHUB_TOKEN` Bearer）、User-Agent、429 自动重试（最多 3 次，尊重 `Retry-After` 头）
-- 所有 GitHub API 调用（仓库元数据、README）都走此函数，避免重复代码
+- `githubFetch(path, options?)` — wraps auth (`GITHUB_TOKEN` Bearer), User-Agent, 429 auto-retry (up to 3 times, respects `Retry-After` header)
+- All GitHub API calls (repo metadata, README) go through this function
 
-### 数据库 Schema（`supabase-schema.sql`）
+### Database Schema (`supabase-schema.sql`)
 
-三张表，以 GitHub 仓库 **id**（不可变整数）为主键：
+Three tables, keyed by GitHub repository **id** (immutable integer):
 
-| 表 | 主键 | 用途 |
-|----|------|------|
-| `repositories` | `id` (BIGINT) | 仓库元数据（full_name, owner, stars, topics 等） |
-| `trending_snapshots` | `(repo_id, since)` | Trending 快照，记录仓库在 daily/weekly/monthly 榜单上的排名和指标 |
-| `readmes` | `repo_id` (BIGINT) | README 原始内容 |
+| Table | Primary Key | Purpose |
+|-------|------------|---------|
+| `repositories` | `id` (BIGINT) | Repo metadata (full_name, owner, stars, topics, etc.) |
+| `trending_snapshots` | `(repo_id, since)` | Trending snapshots tracking repo rank and metrics on daily/weekly/monthly lists |
+| `readmes` | `repo_id` (BIGINT) | Raw README content |
 
-- `trending_snapshots.repo_id` 和 `readmes.repo_id` 外键引用 `repositories(id)`，`ON DELETE CASCADE`
-- RLS 启用：所有表对 `anon` 角色开放 `SELECT`（只读）
-- 写入通过 `service_role` key 绕过 RLS
-- 索引：`full_name`、`language`、`stargazers_count`、`since`、`fetched_at`
+- `trending_snapshots.repo_id` and `readmes.repo_id` foreign-key to `repositories(id)`, `ON DELETE CASCADE`
+- RLS enabled: all tables allow `SELECT` for the `anon` role (read-only)
+- Writes use `service_role` key to bypass RLS
+- Indexes: `full_name`, `language`, `stargazers_count`, `since`, `fetched_at`
 
-### 新增数据源
+### Adding a New Data Source
 
-只需实现对应接口即可扩展。以当前 trending 管线为模板：
+Implement the corresponding interface to extend. Use the current trending pipeline as a template:
 
 ```
-discovery/github-search.ts      → implements Discovery（GitHub Search API，替代 Trending 爬取）
-fetcher/<new-fetcher>.ts        → implements Fetcher<T>（新数据类型）
-storage/<new-storage>.ts        → implements Storage<T>（新存储后端）
-definitions/<new-job>.job.ts    → implements Job（新调度任务，组合 Discovery + Fetcher + Storage）
-app/api/jobs/<new-job>/route.ts → 对应 API 端点
+discovery/<new-discovery>.ts        → implements Discovery
+fetcher/<new-fetcher>.ts            → implements Fetcher<T>
+storage/<new-storage>.ts            → implements Storage<T>
+definitions/<new-job>.job.ts        → implements Job (composes Discovery + Fetcher + Storage)
+app/api/jobs/<new-job>/route.ts     → corresponding API endpoint
 ```
 
-### 依赖
+### Dependencies
 
-- `cheerio` — HTML 解析（GitHub Trending 页面爬取）
-- `@supabase/supabase-js` — Supabase 服务端直连客户端（storage/supabase.ts 使用，绕过 `@supabase/ssr`）
-- 可选 `GITHUB_TOKEN` 环境变量 — 提升 API 速率限制
+- `cheerio` — HTML parsing (GitHub Trending page scraping)
+- `@supabase/supabase-js` — Supabase server-side direct client (used by storage/supabase.ts, bypasses `@supabase/ssr`)
+- Optional `GITHUB_TOKEN` env var — raises API rate limit
 
 ## i18n
 
@@ -171,7 +224,7 @@ app/api/jobs/<new-job>/route.ts → 对应 API 端点
 
 ## Notes
 
-- This project was stripped from a larger markmap app — only i18n routing, locale switching, and Supabase auth scaffolding remain.
+- This project is **GitHub Trending Intelligence** — a Next.js app displaying trending GitHub repositories with daily/weekly/monthly views, language filtering, and Supabase-backed data.
 - All user-facing strings must go through `next-intl` translations, not hardcoded.
 - Keep new pages under `src/app/[locale]/`.
 - Row-Level Security (RLS) should be enforced in Supabase for any data access — the anon key is public.

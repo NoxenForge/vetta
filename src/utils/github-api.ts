@@ -33,7 +33,7 @@ export async function githubFetch(
   const url = `${GITHUB_API_BASE}${path}`;
   const accept = options?.accept ?? "application/vnd.github.v3+json";
 
-  let lastError: Error | null = null;
+  const lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const response = await fetch(url, {
