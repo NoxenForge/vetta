@@ -65,7 +65,15 @@
     "errorLoading": "加载仓库详情失败。",
     "daily": "今日",
     "weekly": "本周",
-    "monthly": "本月"
+    "monthly": "本月",
+    "statsStars": "星数",
+    "statsForks": "复刻",
+    "statsIssues": "问题",
+    "totalGrowth": "总增长",
+    "starGrowthChart": "星数增长",
+    "forkTrendChart": "复刻趋势",
+    "notEnoughData": "数据不足，无法显示趋势图。",
+    "allTab": "全部"
   },
   "Header": {
     "title": "Vetta 趋势",

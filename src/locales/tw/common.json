@@ -65,7 +65,15 @@
     "errorLoading": "載入倉庫詳情失敗。",
     "daily": "今日",
     "weekly": "本週",
-    "monthly": "本月"
+    "monthly": "本月",
+    "statsStars": "星數",
+    "statsForks": "復刻",
+    "statsIssues": "問題",
+    "totalGrowth": "總增長",
+    "starGrowthChart": "星數增長",
+    "forkTrendChart": "復刻趨勢",
+    "notEnoughData": "資料不足，無法顯示趨勢圖。",
+    "allTab": "全部"
   },
   "Header": {
     "title": "GitHub 趨勢情報",

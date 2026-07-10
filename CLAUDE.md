@@ -15,12 +15,15 @@ npm run lint     # ESLint (next lint)
 
 - **Framework:** Next.js 15 (App Router) with Turbopack
 - **UI:** React 19, TailwindCSS v4, **shadcn/ui** (base-nova style, neutral base), **Base UI** (headless primitives)
-- **Styling:** `class-variance-authority` (component variants), `clsx` + `tailwind-merge` (class merging via `cn()`)
+- **Styling:** `class-variance-authority` (component variants), `clsx` + `tailwind-merge` (class merging via `cn()`), `tw-animate-css`
 - **Icons:** lucide-react
-- **Theme:** `next-themes` — dark/light mode with CSS custom properties in `globals.css`
+- **Theme:** `next-themes` — dark/light/system mode with CSS custom properties in `globals.css`
+- **Font:** Geist (next/font/google)
 - **Language:** TypeScript 5 (strict mode)
 - **i18n:** next-intl v4 — `[locale]` prefix routing (en / zh / tw), `as-needed` mode (default locale has no prefix)
 - **Auth/DB:** Supabase (`@supabase/ssr` + `@supabase/supabase-js`) — session-based auth with cookie management in middleware
+- **Monitoring:** Vercel Analytics + Speed Insights
+- **Markdown:** react-markdown + remark-gfm (README rendering)
 - **Output:** standalone mode
 
 ## Project Structure
@@ -28,52 +31,77 @@ npm run lint     # ESLint (next lint)
 ```
 src/
 ├── app/
-│   ├── layout.tsx                    # Root layout (redirects to default locale)
-│   ├── not-found.tsx                 # Global 404
-│   ├── api/jobs/trending/route.ts    # GET /api/jobs/trending → triggers full pipeline
+│   ├── layout.tsx                       # Root layout: Geist font, ThemeProvider, Analytics, SpeedInsights
+│   ├── not-found.tsx                    # Global 404
+│   ├── icon.tsx                         # Favicon
+│   ├── robots.ts                        # robots.txt
+│   ├── sitemap.ts                       # Dynamic sitemap
+│   ├── api/jobs/
+│   │   ├── trending/route.ts        # GET → triggers TrendingJob
+│   │   └── enrich-details/route.ts  # GET → triggers EnrichDetailsJob
 │   └── [locale]/
-│       ├── layout.tsx                # Locale layout (fonts, i18n provider)
-│       ├── page.tsx                  # Home page — GitHub Trending (Server Component)
-│       ├── loading.tsx               # Route-level loading skeleton
-│       ├── error.tsx                 # Route-level error boundary
-│       └── globals.css               # Tailwind + shadcn CSS variables + theme tokens
+│       ├── layout.tsx                   # Locale layout: NextIntlClientProvider + Header + Footer
+│       ├── page.tsx                     # Home page — GitHub Trending (Server Component)
+│       ├── loading.tsx                  # Route-level loading skeleton
+│       ├── error.tsx                    # Route-level error boundary
+│       ├── not-found.tsx                # Locale-level 404
+│       ├── globals.css                  # Tailwind + shadcn CSS variables + theme tokens
+│       ├── privacy/page.tsx             # Privacy policy page
+│       ├── terms/page.tsx               # Terms of service page
+│       └── repo/[owner]/[repo]/
+│           ├── page.tsx                 # Repo detail: RepoHeader, ReadmeViewer, TrendChart
+│           ├── loading.tsx              # RepoDetailSkeleton
+│           └── error.tsx                # Error boundary
 ├── components/
-│   ├── ui/                           # shadcn/ui primitives (Button, Badge, Skeleton)
-│   └── trending/                     # Feature components for the trending page
-│       ├── trending-header.tsx       # Page heading + time range selector
-│       ├── language-filter.tsx       # Programming language filter bar
-│       ├── repository-grid.tsx       # Responsive card grid
-│       ├── repository-card.tsx       # Individual repo card
-│       ├── repository-card-skeleton.tsx  # Loading placeholder
-│       └── time-range-selector.tsx   # daily/weekly/monthly toggle
+│   ├── ui/                              # shadcn/ui primitives (Button, Badge, Skeleton, DropdownMenu)
+│   ├── layout/                          # App shell components
+│   │   ├── header.tsx                   # Sticky header with nav, theme toggle, language switcher
+│   │   ├── footer.tsx                   # Site footer
+│   │   ├── theme-toggle.tsx             # Dark/light/system mode toggle (DropdownMenu)
+│   │   └── language-switcher.tsx        # Locale switcher (en/zh/tw)
+│   ├── trending/                        # Feature components for the trending page
+│   │   ├── trending-header.tsx          # Page heading + time range selector
+│   │   ├── language-filter.tsx          # Programming language filter bar
+│   │   ├── repository-grid.tsx          # Responsive card grid
+│   │   ├── repository-card.tsx          # Individual repo card
+│   │   ├── repository-card-skeleton.tsx # Loading placeholder
+│   │   └── time-range-selector.tsx      # daily/weekly/monthly toggle
+│   └── repo/                            # Repo detail page components
+│       ├── repo-header.tsx              # Repo metadata header
+│       ├── readme-viewer.tsx            # Markdown README renderer
+│       ├── trend-chart.tsx              # Snapshot history table (daily/weekly/monthly/all tabs)
+│       └── repo-detail-skeleton.tsx     # Loading skeleton
 ├── lib/
-│   ├── utils.ts                      # cn() helper (clsx + tailwind-merge)
-│   └── repository.service.ts         # Data fetching: getTrendingRepos(), getAvailableLanguages()
+│   ├── utils.ts                         # cn() helper (clsx + tailwind-merge)
+│   └── repository.service.ts            # Data fetching: getTrendingRepos(), getAvailableLanguages(), getRepoDetail()
 ├── types/
-│   └── ui.ts                         # TrendingRepo, TrendingFilters, TimeRange
+│   └── ui.ts                            # TrendingRepo, TrendingFilters, TimeRange, RepoDetail, TrendSnapshot
 ├── i18n/
-│   ├── request.ts                    # next-intl config (server-side)
-│   └── routing.ts                    # Locale routing + Link/redirect/usePathname helpers
+│   ├── request.ts                       # next-intl config (server-side)
+│   └── routing.ts                       # Locale routing + Link/redirect/usePathname helpers
 ├── locales/
 │   ├── en/common.json
 │   ├── zh/common.json
 │   └── tw/common.json
-├── jobs/                             # 4-layer data pipeline (see Jobs Pipeline section)
-│   ├── index.ts                      # Module entry — registers all jobs on import
-│   ├── scheduler/                    # registry.ts (global singleton JobRegistry) + types.ts
-│   ├── discovery/                    # github-trending.ts + types.ts
-│   ├── fetcher/                      # repository.ts, readme.ts + types.ts
-│   ├── storage/                      # supabase.ts, json-file.ts, memory.ts + types.ts
-│   └── definitions/                  # trending.job.ts (composes Discovery + Fetcher + Storage)
+├── jobs/                                # 4-layer data pipeline (see Jobs Pipeline section)
+│   ├── index.ts                         # Module entry — registers all jobs on import
+│   ├── scheduler/                       # registry.ts (global singleton JobRegistry) + types.ts
+│   ├── discovery/                       # github-trending.ts + types.ts
+│   ├── fetcher/                         # repository.ts, readme.ts + types.ts
+│   ├── storage/                         # supabase.ts, json-file.ts, memory.ts + types.ts
+│   └── definitions/
+│       ├── trending.job.ts             # TrendingJob: Discovery + Repo Fetch + Snapshots (no README)
+│       └── enrich-details.job.ts       # EnrichDetailsJob: 全量刷新所有仓库元数据+README
 ├── utils/
-│   ├── github-api.ts                 # GitHub API shared client (auth, retry, 429 handling)
+│   ├── github-api.ts                    # GitHub API shared client (auth, retry, 429 handling)
 │   └── supabase/
-│       ├── client.ts                 # Browser client (createBrowserClient)
-│       ├── server.ts                 # Server Component client (createServerClient + cookies)
-│       └── middleware.ts             # Middleware client (createServerClient + NextRequest)
-└── middleware.ts                     # Combined: Supabase session refresh + next-intl routing
-components.json                       # shadcn/ui configuration
-supabase-schema.sql                   # Database table definitions + RLS policies
+│       ├── client.ts                    # Browser client (createBrowserClient)
+│       ├── server.ts                    # Server Component client (createServerClient + cookies)
+│       └── middleware.ts                # Middleware client (createServerClient + NextRequest)
+└── middleware.ts                        # Combined: Supabase session refresh + next-intl routing
+components.json                          # shadcn/ui configuration
+supabase-schema.sql                      # Database table definitions + RLS policies + migrations
+vercel.json                              # Vercel Cron Job config (daily trending fetch at UTC+0 midnight)
 ```
 
 ## Architecture Notes
@@ -87,6 +115,19 @@ The home page (`src/app/[locale]/page.tsx`) follows the RSC (React Server Compon
 3. `repository.service.ts` queries Supabase via the **anon key** (public read, RLS-enforced)
 4. Two parallel fetches: `getTrendingRepos()` + `getAvailableLanguages()` (no waterfall)
 5. Three `<Suspense>` boundaries provide progressive loading: header → language filter → grid
+
+### Repo Detail Page
+
+`src/app/[locale]/repo/[owner]/[repo]/page.tsx` — individual repository view:
+
+1. Fetches full repo detail via `getRepoDetail(owner, repo)` — includes metadata, README content, and all snapshots
+2. Returns 404 via `notFound()` if repo doesn't exist
+3. Three `<Suspense>` sections: RepoHeader, ReadmeViewer, TrendChart
+4. `generateMetadata()` dynamically sets OG title/description/avatar for social sharing
+
+### Sorting Strategy
+
+Repositories are sorted **client-side by `stargazers_count` descending** because Supabase doesn't support ordering by joined table fields. The `rank` field in `trending_snapshots` is only for historical reference, not display ordering. This prevents duplicate rank 1 entries when a repo drops off the trending list between fetches.
 
 ### Theme System
 
@@ -102,7 +143,13 @@ The home page (`src/app/[locale]/page.tsx`) follows the RSC (React Server Compon
 - Components use **Base UI** (`@base-ui/react`) as the headless foundation (e.g., `<ButtonPrimitive>`)
 - **CVA** (`class-variance-authority`) defines variant/size APIs: `buttonVariants({ variant: "outline", size: "lg" })`
 - Custom composable components use `useRender` from Base UI for polymorphic rendering
-- Feature components under `components/trending/` are standard React components (no shadcn wrapping needed)
+- Feature components under `components/` are standard React components (no shadcn wrapping needed)
+
+### Layout & Shell
+
+- **Root layout** (`src/app/layout.tsx`): Geist font, `<ThemeProvider>`, Vercel Analytics + Speed Insights
+- **Locale layout** (`src/app/[locale]/layout.tsx`): `<NextIntlClientProvider>` wraps `<Header />` + `<main>{children}</main>` + `<Footer />`
+- Header (Client Component): sticky, responsive with mobile hamburger menu, nav links (Home, Privacy, Terms), theme toggle, language switcher
 
 ### Middleware (combined auth + i18n)
 
@@ -111,7 +158,7 @@ The home page (`src/app/[locale]/page.tsx`) follows the RSC (React Server Compon
 2. Delegates to `next-intl` middleware for locale routing.
 3. Merges Supabase `Set-Cookie` headers into the intl response so session cookies survive locale redirects.
 
-The matcher excludes static assets and API routes.
+The matcher excludes static assets, API routes, and common file patterns.
 
 ### Supabase Client Pattern
 
@@ -134,6 +181,32 @@ SUPABASE_SERVICE_ROLE_KEY=          # Supabase service_role key (server-side wri
 NEXT_PUBLIC_SITE_URL=               # Site URL for metadata (default: http://localhost:4000)
 GITHUB_TOKEN=                       # GitHub personal access token (optional, raises rate limit 60→5000 req/h)
 ```
+
+### Vercel Cron Jobs
+
+Configured in `vercel.json` — two independent cron jobs:
+
+```json
+{
+  "crons": [
+    {
+      "path": "/api/jobs/trending?secret=vetta_cron_secret_2026",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/jobs/enrich-details?secret=vetta_cron_secret_2026",
+      "schedule": "0 1 * * *"
+    }
+  ]
+}
+```
+
+| Job | Schedule (UTC) | Purpose |
+|-----|---------------|---------|
+| `trending` | `0 0 * * *` (midnight) | Discover trending repos + save metadata + snapshots |
+| `enrich-details` | `0 1 * * *` (1am) | Full refresh: iterate ALL repos, fetch metadata + README |
+
+The separation ensures repos from any source (not just trending) get their READMEs filled, and timing between the two pipelines stays independent. Each API route checks the `secret` query param against `CRON_SECRET` before executing.
 
 ## Jobs Pipeline (4-Layer Architecture)
 
@@ -158,13 +231,32 @@ Storage       →  Write to Supabase / JSON file / memory
 | Fetcher | `fetcher/types.ts` | `Fetcher<T> { name, fetch(owner, repo, ctx) → T }` |
 | Storage | `storage/types.ts` | `Storage<T> { name, save(data), saveBatch(data[]) }` |
 
-### Trigger
+### Triggers
 
 ```
-GET /api/jobs/trending    → executes TrendingJob (full pipeline)
+GET /api/jobs/trending?secret=...         → executes TrendingJob (discovery + metadata + snapshots)
+GET /api/jobs/enrich-details?secret=...   → executes EnrichDetailsJob (README补抓)
 ```
 
-The API route is at `src/app/api/jobs/trending/route.ts`. `src/jobs/index.ts` registers the trending job with the global `JobRegistry` singleton on module load; the route triggers it via `registry.run("trending", ctx)`.
+Both API routes follow the same pattern: `force-dynamic`, `nodejs` runtime, secret-based auth. `src/jobs/index.ts` registers both jobs with the global `JobRegistry` singleton on module load.
+
+### TrendingJob Flow (`definitions/trending.job.ts`)
+
+1. Iterates over all three `since` values (daily, weekly, monthly)
+2. **Discovery**: scrapes GitHub Trending HTML via `cheerio`
+3. **Fetcher** (with concurrency limit of 5): fetches repo metadata from GitHub API
+4. **Snapshot generation**: creates `TrendingSnapshot` records combining candidate rank with fetched repo stats
+5. **Storage**: writes unique repos + all snapshots to Supabase via `service_role` key
+
+**Note:** TrendingJob no longer fetches READMEs — that's handled by enrich-details.
+
+### EnrichDetailsJob Flow (`definitions/enrich-details.job.ts`)
+
+1. Queries `repositories` table for **all** repos
+2. For each repo, fetches **metadata + README in parallel** (2 API calls per repo)
+3. Saves via `repoStorage.saveBatch()` + `readmeStorage.saveBatch()` (upsert)
+4. Runs daily at UTC 1am — ensures all repo data stays fresh regardless of source
+5. Per-repo API calls: `GET /repos/{owner}/{repo}` + `GET /repos/{owner}/{repo}/readme`
 
 ### Data Storage
 
@@ -189,13 +281,15 @@ Three tables, keyed by GitHub repository **id** (immutable integer):
 | Table | Primary Key | Purpose |
 |-------|------------|---------|
 | `repositories` | `id` (BIGINT) | Repo metadata (full_name, owner, stars, topics, etc.) |
-| `trending_snapshots` | `(repo_id, since)` | Trending snapshots tracking repo rank and metrics on daily/weekly/monthly lists |
+| `trending_snapshots` | `(repo_id, since)` | Trending snapshots with repo metrics by time range |
 | `readmes` | `repo_id` (BIGINT) | Raw README content |
 
+- All tables have `created_at` and `updated_at` TIMESTAMPTZ columns
 - `trending_snapshots.repo_id` and `readmes.repo_id` foreign-key to `repositories(id)`, `ON DELETE CASCADE`
 - RLS enabled: all tables allow `SELECT` for the `anon` role (read-only)
 - Writes use `service_role` key to bypass RLS
 - Indexes: `full_name`, `language`, `stargazers_count`, `since`, `fetched_at`
+- Schema includes migration statements (`ADD COLUMN IF NOT EXISTS`, `ALTER COLUMN`) for existing tables
 
 ### Adding a New Data Source
 
@@ -221,10 +315,11 @@ app/api/jobs/<new-job>/route.ts     → corresponding API endpoint
 - **Locale prefix mode:** `as-needed` — default locale (`en`) gets no URL prefix; `zh` and `tw` get `/zh/` and `/tw/` prefixes
 - **Helper functions** exported from `src/i18n/routing.ts`: `Link`, `redirect`, `usePathname`, `useRouter` (navigation-aware), plus `isDefaultLocale()` and `localePrefix()`
 - **Config files:** `src/i18n/request.ts`, `src/i18n/routing.ts`
+- Translation keys follow a namespace pattern (e.g., `"Header.title"`, `"Trending.title"`, `"Repo.trendHistory"`)
 
 ## Notes
 
-- This project is **Vetta** — a Next.js app displaying trending GitHub repositories with daily/weekly/monthly views, language filtering, and Supabase-backed data.
+- This project is **Vetta** — a Next.js app displaying trending GitHub repositories with daily/weekly/monthly views, language filtering, individual repo detail pages with README rendering, and Supabase-backed data.
 - All user-facing strings must go through `next-intl` translations, not hardcoded.
 - Keep new pages under `src/app/[locale]/`.
 - Row-Level Security (RLS) should be enforced in Supabase for any data access — the anon key is public.

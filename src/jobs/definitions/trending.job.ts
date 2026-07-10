@@ -2,17 +2,8 @@ import type { Job, JobContext } from "@/jobs/scheduler/types";
 import { githubTrending } from "@/jobs/discovery/github-trending";
 import type { TrendingOptions } from "@/jobs/discovery/types";
 import { repositoryFetcher } from "@/jobs/fetcher/repository";
-import { readmeFetcher } from "@/jobs/fetcher/readme";
-import type {
-  Repository,
-  TrendingSnapshot,
-  Readme,
-} from "@/jobs/fetcher/types";
-import {
-  repoStorage,
-  snapStorage,
-  readmeStorage,
-} from "@/jobs/storage/supabase";
+import type { Repository, TrendingSnapshot } from "@/jobs/fetcher/types";
+import { repoStorage, snapStorage } from "@/jobs/storage/supabase";
 
 const SINCE_OPTIONS: TrendingOptions["since"][] = [
   "daily",
@@ -51,12 +42,8 @@ export const trendingJob: Job = {
   async run(ctx: JobContext): Promise<void> {
     ctx.log("[TrendingJob] 开始执行...");
 
-    // 跨 since 去重：full_name → repo.id 映射
-    const repoIdByFullName = new Map<string, number>();
-
     const allRepos: Repository[] = [];
     const allSnapshots: TrendingSnapshot[] = [];
-    const allReadmes: Readme[] = [];
     let totalSuccess = 0;
     let totalFail = 0;
 
@@ -81,15 +68,12 @@ export const trendingJob: Job = {
               ctx,
             );
 
-            // 记录 id 映射（跨 since 复用）
-            repoIdByFullName.set(repo.full_name, repo.id);
-
             totalSuccess++;
             ctx.log(
               `[TrendingJob] ${since} #${index + 1} ${candidate.owner}/${candidate.repo} ✅`,
             );
 
-            // 生成快照（在 Job 层组合，不依赖 FetchResult）
+            // 生成快照（在 Job 层组合）
             const snapshot: TrendingSnapshot = {
               repo_id: repo.id,
               since,
@@ -118,44 +102,6 @@ export const trendingJob: Job = {
           allSnapshots.push(r.snapshot);
         }
       }
-
-      // ── Fetcher: README（跨 since 去重：已有 repo_id 的跳过）──
-      const snatchedIds = new Set(allReadmes.map((r) => r.repo_id));
-
-      const newCandidates = candidates.filter(
-        (c) =>
-          !snatchedIds.has(
-            repoIdByFullName.get(`${c.owner}/${c.repo}`) ?? 0,
-          ),
-      );
-
-      if (newCandidates.length > 0) {
-        const readmes = await mapWithConcurrency(
-          newCandidates,
-          async (candidate) => {
-            try {
-              const readme = await readmeFetcher.fetch(
-                candidate.owner,
-                candidate.repo,
-                ctx,
-              );
-              const repoId =
-                repoIdByFullName.get(`${candidate.owner}/${candidate.repo}`) ?? 0;
-              return { ...readme, repo_id: repoId };
-            } catch {
-              ctx.log(
-                `[TrendingJob] README 跳过 ${candidate.owner}/${candidate.repo}`,
-              );
-              return null;
-            }
-          },
-          MAX_CONCURRENCY,
-        );
-
-        allReadmes.push(
-          ...readmes.filter((r): r is Readme => r !== null),
-        );
-      }
     }
 
     ctx.log(
@@ -164,7 +110,6 @@ export const trendingJob: Job = {
 
     // ── Storage: 写入 Supabase ──
     if (allRepos.length > 0) {
-      // 去重：同一 id 跨 since 出现多次，只保留最后抓取的那条
       const uniqueRepos = Array.from(
         new Map(allRepos.map((r) => [r.id, r])).values(),
       );
@@ -177,11 +122,6 @@ export const trendingJob: Job = {
     if (allSnapshots.length > 0) {
       await snapStorage.saveBatch(allSnapshots);
       ctx.log(`[TrendingJob] 已存储 ${allSnapshots.length} 条快照`);
-    }
-
-    if (allReadmes.length > 0) {
-      await readmeStorage.saveBatch(allReadmes);
-      ctx.log(`[TrendingJob] 已存储 ${allReadmes.length} 条 README`);
     }
 
     ctx.log("[TrendingJob] 任务完成!");

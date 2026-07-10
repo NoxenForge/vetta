@@ -21,7 +21,7 @@ export function TrendChart({ snapshots }: TrendChartProps) {
       : snapshots.filter((s) => s.since === tab);
 
   const tabs: { key: TabKey; label: string }[] = [
-    { key: "all", label: "All" },
+    { key: "all", label: t("allTab") },
     { key: "daily", label: t("daily") },
     { key: "weekly", label: t("weekly") },
     { key: "monthly", label: t("monthly") },
@@ -47,6 +47,8 @@ export function TrendChart({ snapshots }: TrendChartProps) {
           {tabs.map(({ key, label }) => (
             <button
               key={key}
+              role="tab"
+              aria-selected={tab === key}
               onClick={() => setTab(key)}
               className={cn(
                 "px-2.5 py-1 text-xs font-medium rounded-md transition-colors",

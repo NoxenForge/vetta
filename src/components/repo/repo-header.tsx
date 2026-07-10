@@ -124,7 +124,7 @@ export async function RepoHeader({ detail }: RepoHeaderProps) {
           <span className="font-mono tabular-nums font-medium text-foreground">
             {formatNumber(detail.open_issues_count)}
           </span>
-          {"issues"}
+          {t("issues", { count: detail.open_issues_count }).replace(formatNumber(detail.open_issues_count), "").trim()}
         </span>
         {detail.created_at && (
           <span className="text-xs">

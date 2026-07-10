@@ -65,7 +65,15 @@
     "errorLoading": "Failed to load repository details.",
     "daily": "Daily",
     "weekly": "Weekly",
-    "monthly": "Monthly"
+    "monthly": "Monthly",
+    "statsStars": "Stars",
+    "statsForks": "Forks",
+    "statsIssues": "Issues",
+    "totalGrowth": "Growth",
+    "starGrowthChart": "Star Growth",
+    "forkTrendChart": "Fork Trend",
+    "notEnoughData": "Not enough data for trend chart.",
+    "allTab": "All"
   },
   "Header": {
     "title": "Vetta",

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Link } from "@/i18n/routing";
 import { Badge } from "@/components/ui/badge";
 import { Star, GitFork, Clock, TrendingUp } from "lucide-react";
 import type { TrendingRepo } from "@/types/ui";
@@ -80,10 +81,8 @@ export async function RepositoryCard({ repo }: RepositoryCardProps) {
   const color = langColor(repo.language);
 
   return (
-    <a
-      href={`https://github.com/${repo.full_name}`}
-      target="_blank"
-      rel="noopener noreferrer"
+    <Link
+      href={`/repo/${repo.owner}/${repo.repo}`}
       className="group relative flex flex-col rounded-lg border bg-card p-4 transition-all hover:border-primary/40 hover:shadow-sm"
     >
       {/* Header: avatar + name */}
@@ -160,6 +159,6 @@ export async function RepositoryCard({ repo }: RepositoryCardProps) {
           )}
         </div>
       )}
-    </a>
+    </Link>
   );
 }
