@@ -113,7 +113,10 @@ export const trendingJob: Job = {
       const uniqueRepos = Array.from(
         new Map(allRepos.map((r) => [r.id, r])).values(),
       );
-      await repoStorage.saveBatch(uniqueRepos);
+      const repoRows = uniqueRepos.map(
+        ({ stargazers_count, forks_count, open_issues_count, fetched_at, ...row }) => row,
+      );
+      await repoStorage.saveBatch(repoRows);
       ctx.log(
         `[TrendingJob] 已存储 ${uniqueRepos.length} 条仓库元数据`,
       );

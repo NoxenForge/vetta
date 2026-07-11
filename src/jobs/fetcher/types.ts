@@ -30,6 +30,9 @@ export interface Repository {
   fetched_at: string;
 }
 
+/** repositories 表可写入的字段（排除变动数据列，这些由 snapshots 管理） */
+export type RepoRow = Omit<Repository, "stargazers_count" | "forks_count" | "open_issues_count" | "fetched_at">;
+
 export const repositoryKey = (r: Repository): string => String(r.id);
 
 // ── Trending 快照 ───────────────────────────────────

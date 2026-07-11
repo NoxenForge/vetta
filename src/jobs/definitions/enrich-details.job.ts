@@ -189,8 +189,11 @@ export const enrichDetailsJob: Job = {
 
     // 3. 存储
     if (allMetaResults.length > 0) {
-      await repoStorage.saveBatch(allMetaResults);
-      ctx.log(`[EnrichDetails] 已刷新 ${allMetaResults.length} 条仓库元数据`);
+      const repoRows = allMetaResults.map(
+        ({ stargazers_count, forks_count, open_issues_count, fetched_at, ...row }) => row,
+      );
+      await repoStorage.saveBatch(repoRows);
+      ctx.log(`[EnrichDetails] 已刷新 ${repoRows.length} 条仓库元数据`);
 
       // 为每个仓库写入 daily 快照（趋势图需要多时间点的数据）
       const now = new Date().toISOString();

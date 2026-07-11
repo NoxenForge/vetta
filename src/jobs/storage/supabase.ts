@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Storage } from "./types";
 import type {
   Repository,
+  RepoRow,
   TrendingSnapshot,
   Readme,
 } from "@/jobs/fetcher/types";
@@ -30,11 +31,11 @@ const SNAPS_TABLE = "trending_snapshots";
 /** README 表名 */
 const READMES_TABLE = "readmes";
 
-/** Repository Supabase 存储 */
-export const repoStorage: Storage<Repository> = {
+/** Repository Supabase 存储（只写入静态字段，变动数据由 snapshots 管理） */
+export const repoStorage: Storage<RepoRow> = {
   name: "supabase-repositories",
 
-  async save(data: Repository): Promise<void> {
+  async save(data: RepoRow): Promise<void> {
     const supabase = getSupabase();
     const { error } = await supabase
       .from(REPOS_TABLE)
@@ -43,7 +44,7 @@ export const repoStorage: Storage<Repository> = {
     if (error) throw new Error(`Repository 写入失败: ${error.message}`);
   },
 
-  async saveBatch(data: Repository[]): Promise<void> {
+  async saveBatch(data: RepoRow[]): Promise<void> {
     if (data.length === 0) return;
     const supabase = getSupabase();
     const { error } = await supabase

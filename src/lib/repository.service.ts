@@ -17,7 +17,7 @@ function getClient() {
   return createClient(supabaseUrl, supabaseKey);
 }
 
-/** 快照行原始数据（Supabase join 返回格式） */
+/** 快照行原始数据（Supabase join 返回格式 — repositories 不含变动数据列） */
 interface SnapshotRow {
   since: string;
   rank: number;
@@ -39,8 +39,6 @@ interface SnapshotRow {
     created_at: string;
     updated_at: string;
     pushed_at: string;
-    stargazers_count: number;
-    forks_count: number;
     [key: string]: unknown;
   };
 }
@@ -62,8 +60,9 @@ function mapRow(row: SnapshotRow): TrendingRepo {
     created_at: r.created_at,
     updated_at: r.updated_at,
     pushed_at: r.pushed_at,
-    stargazers_count: r.stargazers_count,
-    forks_count: r.forks_count,
+    // 变动数据统一从 snapshot 读取
+    stargazers_count: row.stargazers_count,
+    forks_count: row.forks_count,
     since: row.since,
     rank: row.rank,
     snapshot_stargazers_count: row.stargazers_count,
@@ -108,9 +107,25 @@ export async function getTrendingRepos(
 
   if (!data || data.length === 0) return [];
 
-  const repos = (data as unknown as SnapshotRow[]).map(mapRow);
+  const rows = data as unknown as SnapshotRow[];
 
-  // 按 star 数量降序排列（Supabase 不支持按 join 表的字段排序）
+  // 去重：同一 repo_id 可能有多个 snapshot（PK 现在是 repo_id + since + fetched_at）
+  // 保留每个 repo 最新的 snapshot
+  const latest = new Map<number, SnapshotRow>();
+  for (const row of rows) {
+    const existing = latest.get(row.repositories.id);
+    if (
+      !existing ||
+      new Date(row.fetched_at).getTime() >
+        new Date(existing.fetched_at).getTime()
+    ) {
+      latest.set(row.repositories.id, row);
+    }
+  }
+
+  const repos = Array.from(latest.values()).map(mapRow);
+
+  // 按 snapshot 的 star 数量降序排列
   repos.sort((a, b) => b.stargazers_count - a.stargazers_count);
 
   return repos;
@@ -181,6 +196,8 @@ export async function getRepoDetail(
 
   const readmeRow = readmeResult.data;
   const snapshotRows = (snapshotsResult.data ?? []) as unknown as TrendSnapshot[];
+  // 变动数据从最新 snapshot 读取
+  const latestSnapshot = snapshotRows[0] ?? null;
 
   return {
     id: repoRow.id,
@@ -199,10 +216,10 @@ export async function getRepoDetail(
     created_at: repoRow.created_at,
     updated_at: repoRow.updated_at,
     pushed_at: repoRow.pushed_at,
-    stargazers_count: repoRow.stargazers_count,
-    forks_count: repoRow.forks_count,
-    open_issues_count: repoRow.open_issues_count,
-    fetched_at: repoRow.fetched_at,
+    stargazers_count: latestSnapshot?.stargazers_count ?? 0,
+    forks_count: latestSnapshot?.forks_count ?? 0,
+    open_issues_count: latestSnapshot?.open_issues_count ?? 0,
+    fetched_at: latestSnapshot?.fetched_at ?? repoRow.updated_at,
     commit_activity: Array.isArray(repoRow.commit_activity)
       ? repoRow.commit_activity
       : repoRow.commit_activity && typeof repoRow.commit_activity === "object"

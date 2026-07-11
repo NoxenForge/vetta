@@ -17,11 +17,7 @@ CREATE TABLE IF NOT EXISTS repositories (
   fork                BOOLEAN NOT NULL DEFAULT FALSE,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  pushed_at           TIMESTAMPTZ,
-  stargazers_count    INTEGER NOT NULL DEFAULT 0,
-  forks_count         INTEGER NOT NULL DEFAULT 0,
-  open_issues_count   INTEGER NOT NULL DEFAULT 0,
-  fetched_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  pushed_at           TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS trending_snapshots (
@@ -48,7 +44,6 @@ CREATE TABLE IF NOT EXISTS readmes (
 
 CREATE INDEX IF NOT EXISTS idx_repos_full_name ON repositories(full_name);
 CREATE INDEX IF NOT EXISTS idx_repos_language ON repositories(language);
-CREATE INDEX IF NOT EXISTS idx_repos_stars ON repositories(stargazers_count DESC);
 CREATE INDEX IF NOT EXISTS idx_snapshots_since ON trending_snapshots(since);
 CREATE INDEX IF NOT EXISTS idx_snapshots_fetched ON trending_snapshots(fetched_at DESC);
 
