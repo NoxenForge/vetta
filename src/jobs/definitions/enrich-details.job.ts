@@ -190,7 +190,7 @@ export const enrichDetailsJob: Job = {
     // 3. 存储
     if (allMetaResults.length > 0) {
       const repoRows = allMetaResults.map(
-        ({ stargazers_count, forks_count, open_issues_count, fetched_at, ...row }) => row,
+        ({ stargazers_count: _, forks_count: _f, open_issues_count: _o, fetched_at: _fa, ...row }) => row,
       );
       await repoStorage.saveBatch(repoRows);
       ctx.log(`[EnrichDetails] 已刷新 ${repoRows.length} 条仓库元数据`);
