@@ -125,7 +125,30 @@ export async function getTrendingRepos(
 
   const repos = Array.from(latest.values()).map(mapRow);
 
-  // 按 snapshot 的 star 数量降序排列
+  // 获取每个仓库的最新全局 star 数（跨所有 since，用于计算增长量）
+  const repoIds = repos.map((r) => r.id);
+  const { data: globalSnapshots } = await supabase
+    .from("trending_snapshots")
+    .select("repo_id, stargazers_count")
+    .in("repo_id", repoIds)
+    .order("fetched_at", { ascending: false });
+
+  if (globalSnapshots) {
+    const latestStars = new Map<number, number>();
+    for (const s of globalSnapshots) {
+      if (!latestStars.has(s.repo_id)) {
+        latestStars.set(s.repo_id, s.stargazers_count);
+      }
+    }
+    for (const repo of repos) {
+      const latest = latestStars.get(repo.id);
+      if (latest !== undefined) {
+        repo.stargazers_count = latest;
+      }
+    }
+  }
+
+  // 按 star 数量降序排列
   repos.sort((a, b) => b.stargazers_count - a.stargazers_count);
 
   return repos;
