@@ -1,12 +1,12 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { getTranslations, getLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { getTrendingRepos, getAvailableLanguages } from "@/lib/repository.service";
 import { TrendingHeader } from "@/components/trending/trending-header";
 import { LanguageFilter } from "@/components/trending/language-filter";
 import { RepositoryGrid } from "@/components/trending/repository-grid";
 import { RepositoryCardSkeleton } from "@/components/trending/repository-card-skeleton";
-import type { TimeRange, TrendingRepo } from "@/types/ui";
+import type { TrendingRepo } from "@/types/ui";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("Trending");
@@ -21,7 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 interface PageProps {
-  searchParams: Promise<{ since?: string; language?: string }>;
+  searchParams: Promise<{ language?: string }>;
 }
 
 function HeaderSkeleton() {
@@ -31,7 +31,6 @@ function HeaderSkeleton() {
         <div className="h-8 w-48 rounded-md bg-muted animate-pulse" />
         <div className="h-4 w-64 rounded-md bg-muted animate-pulse" />
       </div>
-      <div className="h-9 w-[264px] rounded-lg bg-muted animate-pulse" />
     </div>
   );
 }
@@ -48,19 +47,14 @@ function GridSkeleton() {
 
 export default async function HomePage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const locale = await getLocale();
-  const since: TimeRange =
-    params.since === "weekly" || params.since === "monthly"
-      ? params.since
-      : "daily";
 
   let repos: TrendingRepo[];
   let languages: string[] = [];
 
   try {
     const [reposResult, langsResult] = await Promise.all([
-      getTrendingRepos({ since, language: params.language }),
-      getAvailableLanguages(since),
+      getTrendingRepos({ language: params.language }),
+      getAvailableLanguages(),
     ]);
     repos = reposResult;
     languages = langsResult;
@@ -73,7 +67,7 @@ export default async function HomePage({ searchParams }: PageProps) {
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="space-y-6">
         <Suspense fallback={<HeaderSkeleton />}>
-          <TrendingHeader count={repos.length} since={since} updatedAt={repos[0]?.snapshot_fetched_at} locale={locale} />
+          <TrendingHeader count={repos.length} updatedAt={repos[0]?.snapshot_fetched_at} />
         </Suspense>
 
         <Suspense fallback={null}>

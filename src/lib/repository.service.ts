@@ -2,7 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 import type {
   TrendingRepo,
   TrendingFilters,
-  TimeRange,
   RepoDetail,
   TrendSnapshot,
 } from "@/types/ui";
@@ -92,8 +91,7 @@ export async function getTrendingRepos(
       repositories!inner(*)
     `,
     )
-    .eq("since", filters.since)
-    .limit(50);
+    .limit(200);
 
   if (filters.language) {
     query.eq("repositories.language", filters.language);
@@ -155,17 +153,14 @@ export async function getTrendingRepos(
 }
 
 /**
- * 获取指定时间范围内所有可用的编程语言列表
+ * 获取所有可用的编程语言列表
  */
-export async function getAvailableLanguages(
-  since: TimeRange,
-): Promise<string[]> {
+export async function getAvailableLanguages(): Promise<string[]> {
   const supabase = getClient();
 
   const { data, error } = await supabase
     .from("trending_snapshots")
-    .select("repositories!inner(language)")
-    .eq("since", since);
+    .select("repositories!inner(language)");
 
   if (error) {
     throw new Error(`获取语言列表失败: ${error.message}`);

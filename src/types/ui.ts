@@ -74,6 +74,5 @@ export interface TrendingRepo {
 
 /** 页面筛选参数 */
 export interface TrendingFilters {
-  since: TimeRange;
   language?: string;
 }

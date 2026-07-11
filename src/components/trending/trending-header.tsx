@@ -1,14 +1,4 @@
-import { TimeRangeSelector } from "./time-range-selector";
-import type { TimeRange } from "@/types/ui";
 import { getTranslations } from "next-intl/server";
-
-type SubtitleKey = "subtitleDaily" | "subtitleWeekly" | "subtitleMonthly";
-
-function getSubtitleKey(since: TimeRange): SubtitleKey {
-  if (since === "weekly") return "subtitleWeekly";
-  if (since === "monthly") return "subtitleMonthly";
-  return "subtitleDaily";
-}
 
 function formatDate(dateStr: string, locale: string): string {
   const date = new Date(dateStr);
@@ -24,38 +14,32 @@ function formatDate(dateStr: string, locale: string): string {
 
 interface TrendingHeaderProps {
   count: number;
-  since: TimeRange;
   updatedAt?: string | null;
-  locale: string;
+  locale?: string;
 }
 
-/** Page header with title and time range selector */
 export async function TrendingHeader({
   count,
-  since,
   updatedAt,
-  locale,
+  locale = "en",
 }: TrendingHeaderProps) {
   const t = await getTranslations("Trending");
 
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-          {t("title")}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t(getSubtitleKey(since), { count })}
-          {updatedAt && (
-            <>
-              {" · "}
-              {t("lastUpdated")}{" "}
-              {formatDate(updatedAt, locale)}
-            </>
-          )}
-        </p>
-      </div>
-      <TimeRangeSelector />
+    <div>
+      <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+        {t("title")}
+      </h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {t("subtitle", { count })}
+        {updatedAt && (
+          <>
+            {" · "}
+            {t("lastUpdated")}{" "}
+            {formatDate(updatedAt, locale)}
+          </>
+        )}
+      </p>
     </div>
   );
 }
