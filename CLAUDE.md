@@ -16,7 +16,7 @@ npm run lint     # ESLint (next lint)
 - **Framework:** Next.js 15 (App Router) with Turbopack
 - **UI:** React 19, TailwindCSS v4, **shadcn/ui** (base-nova style, neutral base), **Base UI** (headless primitives)
 - **Styling:** `class-variance-authority` (component variants), `clsx` + `tailwind-merge` (class merging via `cn()`), `tw-animate-css`
-- **Charts:** recharts (LineChart) — used in star growth and fork trend charts on repo detail pages
+- **Charts:** recharts (LineChart, BarChart, RadarChart) — time-series charts (star growth, fork trend), commit pulse bar chart, and radar/metrics dashboard
 - **Markdown 渲染:** `react-markdown` + `remark-gfm` + `remark-gemoji` + `rehype-raw` + `rehype-highlight`，使用 `github-markdown-css` 实现 GitHub 官方视觉样式
 - **GFM Alert 支持:** 自定义 `blockquote` 组件将 `> [!NOTE]` / `[!WARNING]` 等渲染为彩色提示框
 - **Icons:** lucide-react
@@ -52,7 +52,7 @@ src/
 │       ├── privacy/page.tsx             # Privacy policy page
 │       ├── terms/page.tsx               # Terms of service page
 │       └── repo/[owner]/[repo]/
-│           ├── page.tsx                 # Repo detail: 6 Suspense sections (see Architecture Notes)
+│           ├── page.tsx                 # Repo detail: 7 Suspense sections (see Architecture Notes)
 │           ├── loading.tsx              # RepoDetailSkeleton
 │           └── error.tsx                # Error boundary
 ├── components/
@@ -71,9 +71,10 @@ src/
 │   │   └── time-range-selector.tsx      # daily/weekly/monthly toggle
 │   └── repo/                            # Repo detail page components
 │       ├── repo-header.tsx              # Repo metadata (avatar, stars, forks, topics, links)
-│       ├── stats-cards.tsx              # KPI cards: stars/forks/issues with sparkline growth
+│       ├── stats-cards.tsx              # 6 KPI cards (stars/forks/issues/contributors/releases/growth) with sparkline
 │       ├── star-growth-chart.tsx        # recharts LineChart — star count over time
 │       ├── fork-trend-chart.tsx         # recharts LineChart — fork count over time (≥2 snapshots)
+│       ├── metrics-dashboard.tsx        # recharts RadarChart + BarChart — 6-dimension radar + 52-week commit pulse
 │       ├── readme-viewer.tsx            # Markdown README renderer
 │       ├── trend-chart.tsx              # Snapshot history table (daily/weekly/monthly/all tabs)
 │       └── repo-detail-skeleton.tsx     # Loading skeleton
@@ -93,7 +94,7 @@ src/
 │   ├── index.ts                         # Module entry — registers all jobs on import
 │   ├── scheduler/                       # registry.ts (global singleton JobRegistry) + types.ts
 │   ├── discovery/                       # github-trending.ts + types.ts
-│   ├── fetcher/                         # repository.ts, readme.ts + types.ts
+│   ├── fetcher/                         # repository.ts, readme.ts, commit-participation.ts, contributor-count.ts, release-summary.ts + types.ts
 │   ├── storage/                         # supabase.ts, json-file.ts, memory.ts + types.ts
 │   └── definitions/
 │       ├── trending.job.ts             # TrendingJob: Discovery + Repo Fetch + Snapshots (no README)
@@ -124,14 +125,15 @@ The home page (`src/app/[locale]/page.tsx`) follows the RSC (React Server Compon
 
 ### Repo Detail Page
 
-`src/app/[locale]/repo/[owner]/[repo]/page.tsx` — individual repository view with 6 Suspense sections:
+`src/app/[locale]/repo/[owner]/[repo]/page.tsx` — individual repository view with 7 Suspense sections:
 
 1. **RepoHeader** — owner/avatar/stars/forks/issues, topics, external links
-2. **StatsCards** — 4 KPI cards (stars, forks, issues, total star growth) with computed growth sparkline
+2. **StatsCards** — 6 KPI cards (stars, forks, issues, total star growth, contributors, releases) with sparkline mini-charts
 3. **StarGrowthChart** — recharts LineChart of stargazers_count across all snapshots (sorted by time)
 4. **ForkTrendChart** — recharts LineChart of forks_count across all snapshots (only rendered when ≥2 snapshots exist)
-5. **ReadmeViewer** — rendered markdown from `readme_content`
-6. **TrendChart** — tabbed table (daily/weekly/monthly/all) of snapshot history
+5. **MetricsDashboard** — recharts RadarChart (6 dimensions: Activity, Community, Issues, Releases, Code, Maintenance) + BarChart (52-week commit pulse)
+6. **ReadmeViewer** — rendered markdown from `readme_content`
+7. **TrendChart** — tabbed table (daily/weekly/monthly/all) of snapshot history
 
 The page also:
 - Returns 404 via `notFound()` if repo doesn't exist
@@ -225,12 +227,13 @@ The separation ensures repos from any source (not just trending) get their data 
 
 ### Charts (recharts)
 
-The repo detail page uses **recharts** (`LineChart`) for two time-series visualizations:
+The repo detail page uses **recharts** for three visualizations:
 
-- **StarGrowthChart**: LineChart of `stargazers_count` across all `TrendSnapshot` entries, sorted by `fetched_at`. Always displayed.
-- **ForkTrendChart**: LineChart of `forks_count` across all snapshots. Only rendered when ≥2 snapshots exist (single-point charts are meaningless).
+- **StarGrowthChart** (`LineChart`): `stargazers_count` across all snapshots, sorted by `fetched_at`. Always displayed.
+- **ForkTrendChart** (`LineChart`): `forks_count` across all snapshots. Only rendered when ≥2 snapshots exist.
+- **MetricsDashboard** (`RadarChart` + `BarChart`): 6-dimension health radar (Activity, Community, Issues, Releases, Code, Maintenance) computed from commit activity, contributor count, release count, star growth, issue count, and last push recency. The commit pulse BarChart visualizes the 52-week `commit_activity` array. Only rendered when at least one metrics field has data.
 
-Both charts share the same pattern:
+All charts share the same pattern:
 - `ResponsiveContainer` for responsive sizing
 - Custom `formatAxis()` helper for K/M axis labels
 - `CartesianGrid` + `Tooltip` for readability
@@ -283,11 +286,15 @@ Both API routes follow the same pattern: `force-dynamic`, `nodejs` runtime, secr
 ### EnrichDetailsJob Flow (`definitions/enrich-details.job.ts`)
 
 1. Queries `repositories` table for **all** repos (id, owner, repo)
-2. For each repo, fetches **metadata + README in parallel** (2 API calls per repo, concurrency limit of 5)
-3. Collects successful results, logs failures individually (non-fatal — one failing repo doesn't block others)
-4. Saves via `repoStorage.saveBatch()` + `readmeStorage.saveBatch()` (upsert)
+2. For each repo, fetches **5 data sources in parallel** (concurrency limit of 5):
+   - Repository metadata (`GET /repos/{owner}/{repo}`)
+   - README content (`GET /repos/{owner}/{repo}/readme`)
+   - Commit participation — 52-week activity (`GET /repos/{owner}/{repo}/stats/participation`; handles 202 "calculating" gracefully)
+   - Release summary — latest 5 releases (`GET /repos/{owner}/{repo}/releases?per_page=5`)
+   - Contributor count — via `Link` header pagination trick (`GET /repos/{owner}/{repo}/contributors?per_page=1&anon=true`)
+3. Collects successful results, logs failures individually (non-fatal)
+4. Saves metadata via `repoStorage.saveBatch()`, README via `readmeStorage.saveBatch()`, and metrics (`commit_activity`, `contributor_count`, `release_count`, `latest_release_at`) via individual `UPDATE` on the `repositories` table
 5. Runs hourly — ensures all repo data stays fresh regardless of source
-6. Per-repo API calls: `GET /repos/{owner}/{repo}` + `GET /repos/{owner}/{repo}/readme`
 
 ### Data Storage
 
@@ -311,12 +318,13 @@ Three tables, keyed by GitHub repository **id** (immutable integer):
 
 | Table | Primary Key | Purpose |
 |-------|------------|---------|
-| `repositories` | `id` (BIGINT) | Repo metadata (full_name, owner, stars, topics, etc.) |
+| `repositories` | `id` (BIGINT) | Repo metadata + engineering metrics (stars, forks, issues, commit_activity, contributor_count, release_count, etc.) |
 | `trending_snapshots` | `(repo_id, since)` | Trending snapshots with repo metrics by time range |
 | `readmes` | `repo_id` (BIGINT) | Raw README content |
 
 - All tables have `created_at` and `updated_at` TIMESTAMPTZ columns
 - `trending_snapshots.repo_id` and `readmes.repo_id` foreign-key to `repositories(id)`, `ON DELETE CASCADE`
+- `repositories` table includes engineering metrics columns: `commit_activity` (JSONB, 52-week array), `contributor_count` (INTEGER), `release_count` (INTEGER), `latest_release_at` (TIMESTAMPTZ)
 - RLS enabled: all tables allow `SELECT` for the `anon` role (read-only)
 - Writes use `service_role` key to bypass RLS
 - Indexes: `full_name`, `language`, `stargazers_count`, `since`, `fetched_at`
@@ -340,6 +348,18 @@ app/api/jobs/<new-job>/route.ts     → corresponding API endpoint
 - `@supabase/supabase-js` — Supabase server-side direct client (used by storage/supabase.ts, bypasses `@supabase/ssr`)
 - Optional `GITHUB_TOKEN` env var — raises API rate limit
 
+### Engineering Metrics Fetchers
+
+Three additional fetchers power the Metrics Dashboard, each calling a different GitHub API endpoint:
+
+| Fetcher | Endpoint | Type | Notes |
+|---------|----------|------|-------|
+| `commitParticipationFetcher` | `GET /repos/{owner}/{repo}/stats/participation` | `CommitParticipation` | Returns 52-week `all` array; handles 202 (background calculation) gracefully |
+| `releaseSummaryFetcher` | `GET /repos/{owner}/{repo}/releases?per_page=5` | `ReleaseSummary` | Returns `release_count` and `latest_release_at` |
+| `contributorCountFetcher` | `GET /repos/{owner}/{repo}/contributors?per_page=1&anon=true` | `ContributorCount` | Parses `Link` header `rel="last"` to get total count without fetching all pages |
+
+All three follow the same pattern: graceful error handling returns zero/empty defaults, and `repo_id` is patched by the job layer after fetching.
+
 ## i18n
 
 - **Supported locales:** `en` (default), `zh`, `tw`
@@ -347,6 +367,11 @@ app/api/jobs/<new-job>/route.ts     → corresponding API endpoint
 - **Helper functions** exported from `src/i18n/routing.ts`: `Link`, `redirect`, `usePathname`, `useRouter` (navigation-aware), plus `isDefaultLocale()` and `localePrefix()`
 - **Config files:** `src/i18n/request.ts`, `src/i18n/routing.ts`
 - Translation keys follow a namespace pattern (e.g., `"Header.title"`, `"Trending.title"`, `"Repo.trendHistory"`)
+
+## Git Workflow
+
+- **每个新功能必须单独新建分支**，不允许直接在 `main` 上开发。分支命名：`feat/<feature-name>`、`fix/<bug-name>`、`chore/<task-name>`。
+- Commit format: `<type>: <description>` — types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`.
 
 ## Notes
 
