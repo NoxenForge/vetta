@@ -62,7 +62,7 @@ export const snapStorage: Storage<TrendingSnapshot> = {
     const supabase = getSupabase();
     const { error } = await supabase
       .from(SNAPS_TABLE)
-      .upsert(data, { onConflict: "repo_id, since" });
+      .insert(data);
 
     if (error) throw new Error(`Snapshot 写入失败: ${error.message}`);
   },
@@ -72,7 +72,7 @@ export const snapStorage: Storage<TrendingSnapshot> = {
     const supabase = getSupabase();
     const { error } = await supabase
       .from(SNAPS_TABLE)
-      .upsert(data, { onConflict: "repo_id, since" });
+      .insert(data);
 
     if (error) throw new Error(`Snapshot 批量写入失败: ${error.message}`);
   },

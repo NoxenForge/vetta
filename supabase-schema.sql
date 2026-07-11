@@ -87,3 +87,11 @@ ALTER TABLE repositories
   ADD COLUMN IF NOT EXISTS contributor_count INTEGER,
   ADD COLUMN IF NOT EXISTS release_count INTEGER,
   ADD COLUMN IF NOT EXISTS latest_release_at TIMESTAMPTZ;
+
+-- ============================================================
+-- 迁移：trending_snapshots 主键改为 (repo_id, since, fetched_at)
+-- 让每次抓取产生独立快照，支持时间序列趋势图
+-- ============================================================
+
+ALTER TABLE trending_snapshots DROP CONSTRAINT IF EXISTS trending_snapshots_pkey;
+ALTER TABLE trending_snapshots ADD PRIMARY KEY (repo_id, since, fetched_at);
