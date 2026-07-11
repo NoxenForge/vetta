@@ -8,8 +8,9 @@ import { contributorCountFetcher } from "@/jobs/fetcher/contributor-count";
 import type {
   Repository,
   Readme,
+  TrendingSnapshot,
 } from "@/jobs/fetcher/types";
-import { repoStorage, readmeStorage } from "@/jobs/storage/supabase";
+import { repoStorage, readmeStorage, snapStorage } from "@/jobs/storage/supabase";
 
 const MAX_CONCURRENCY = 5;
 const REPOS_TABLE = "repositories";
@@ -190,6 +191,22 @@ export const enrichDetailsJob: Job = {
     if (allMetaResults.length > 0) {
       await repoStorage.saveBatch(allMetaResults);
       ctx.log(`[EnrichDetails] 已刷新 ${allMetaResults.length} 条仓库元数据`);
+
+      // 为每个仓库写入 daily 快照（趋势图需要多时间点的数据）
+      const now = new Date().toISOString();
+      const dailySnapshots: TrendingSnapshot[] = allMetaResults.map((r) => ({
+        repo_id: r.id,
+        since: "daily",
+        rank: 0,
+        stargazers_count: r.stargazers_count,
+        forks_count: r.forks_count,
+        open_issues_count: r.open_issues_count,
+        fetched_at: now,
+      }));
+      await snapStorage.saveBatch(dailySnapshots);
+      ctx.log(
+        `[EnrichDetails] 已写入 ${dailySnapshots.length} 条 daily 快照`,
+      );
     }
 
     if (metricsRows.length > 0) {
