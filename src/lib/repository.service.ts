@@ -203,8 +203,9 @@ export async function getRepoDetail(
     forks_count: repoRow.forks_count,
     open_issues_count: repoRow.open_issues_count,
     fetched_at: repoRow.fetched_at,
-    commit_activity:
-      repoRow.commit_activity && typeof repoRow.commit_activity === "object"
+    commit_activity: Array.isArray(repoRow.commit_activity)
+      ? repoRow.commit_activity
+      : repoRow.commit_activity && typeof repoRow.commit_activity === "object"
         ? (repoRow.commit_activity as { all?: number[] }).all ?? null
         : null,
     contributor_count:
