@@ -108,7 +108,7 @@ src/
 └── middleware.ts                        # Combined: Supabase session refresh + next-intl routing
 components.json                          # shadcn/ui configuration
 supabase-schema.sql                      # Database table definitions + RLS policies + migrations
-vercel.json                              # Vercel Cron Job config (two cron jobs at UTC midnight + 1am)
+vercel.json                              # Vercel Cron Job config (midnight UTC + 1am UTC daily)
 ```
 
 ## Architecture Notes
@@ -212,7 +212,7 @@ Configured in `vercel.json` — two independent cron jobs:
     },
     {
       "path": "/api/jobs/enrich-details?secret=vetta_cron_secret_2026",
-      "schedule": "0 * * * *"
+      "schedule": "0 1 * * *"
     }
   ]
 }
@@ -221,7 +221,7 @@ Configured in `vercel.json` — two independent cron jobs:
 | Job | Schedule (UTC) | Purpose |
 |-----|---------------|---------|
 | `trending` | `0 0 * * *` (midnight) | Discover trending repos + save metadata + snapshots |
-| `enrich-details` | `0 * * * *` (hourly) | Full refresh: iterate ALL repos, fetch metadata + README |
+| `enrich-details` | `0 1 * * *` (1:00 AM UTC) | Full refresh: iterate ALL repos, fetch metadata + README + metrics |
 
 The separation ensures repos from any source (not just trending) get their data filled, and timing between the two pipelines stays independent. Each API route checks the `secret` query param before executing.
 
@@ -294,7 +294,7 @@ Both API routes follow the same pattern: `force-dynamic`, `nodejs` runtime, secr
    - Contributor count — via `Link` header pagination trick (`GET /repos/{owner}/{repo}/contributors?per_page=1&anon=true`)
 3. Collects successful results, logs failures individually (non-fatal)
 4. Saves metadata via `repoStorage.saveBatch()`, README via `readmeStorage.saveBatch()`, and metrics (`commit_activity`, `contributor_count`, `release_count`, `latest_release_at`) via individual `UPDATE` on the `repositories` table
-5. Runs hourly — ensures all repo data stays fresh regardless of source
+5. Runs daily at 1:00 AM UTC — ensures all repo data stays fresh regardless of source
 
 ### Data Storage
 
