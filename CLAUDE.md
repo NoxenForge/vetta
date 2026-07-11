@@ -199,9 +199,9 @@ GITHUB_TOKEN=                       # GitHub personal access token (optional, ra
 
 Note: The `secret` query parameter used by Vercel Cron Job API routes is hardcoded as `"vetta_cron_secret_2026"` in each route file — it does not use an environment variable.
 
-### Vercel Cron Jobs
+### Vercel Cron Jobs + GitHub Actions
 
-Configured in `vercel.json` — two independent cron jobs:
+**Vercel Cron** (vercel.json) — two daily jobs（Hobby 计划限制每天最多一次）：
 
 ```json
 {
@@ -221,9 +221,15 @@ Configured in `vercel.json` — two independent cron jobs:
 | Job | Schedule (UTC) | Purpose |
 |-----|---------------|---------|
 | `trending` | `0 0 * * *` (midnight) | Discover trending repos + save metadata + snapshots |
-| `enrich-details` | `0 1 * * *` (1:00 AM UTC) | Full refresh: iterate ALL repos, fetch metadata + README + metrics |
+| `enrich-details` | `0 1 * * *` (1:00 AM) | Daily full refresh: metadata + README + metrics（冗余备份） |
 
-The separation ensures repos from any source (not just trending) get their data filled, and timing between the two pipelines stays independent. Each API route checks the `secret` query param before executing.
+**GitHub Actions** (`.github/workflows/enrich-details.yml`) — 绕过 Vercel Hobby 限制，实现每小时调用：
+
+| Workflow | Schedule | Purpose |
+|----------|----------|---------|
+| `Enrich Details (Hourly)` | `0 * * * *` (hourly) | 通过 `curl` 调用 Vercel 生产环境 API，每小时刷新所有仓库数据 |
+
+Vercel Cron 的 `0 1 * * *` enrich-details 作为 GitHub Actions 的冗余备份。
 
 ### Charts (recharts)
 
