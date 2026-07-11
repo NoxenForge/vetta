@@ -107,44 +107,34 @@ export async function getTrendingRepos(
 
   const rows = data as unknown as SnapshotRow[];
 
-  // 去重：同一 repo_id 可能有多个 snapshot（PK 现在是 repo_id + since + fetched_at）
-  // 保留每个 repo 最新的 snapshot
+  // 每个仓库可能有多个 snapshot（PK: repo_id + since + fetched_at）
+  // 保留最新和最旧两个 snapshot：最新用于排序，差值用于增长计算
   const latest = new Map<number, SnapshotRow>();
+  const oldest = new Map<number, SnapshotRow>();
   for (const row of rows) {
-    const existing = latest.get(row.repositories.id);
-    if (
-      !existing ||
-      new Date(row.fetched_at).getTime() >
-        new Date(existing.fetched_at).getTime()
-    ) {
-      latest.set(row.repositories.id, row);
+    const repoId = row.repositories.id;
+    const t = new Date(row.fetched_at).getTime();
+
+    const curLatest = latest.get(repoId);
+    if (!curLatest || t > new Date(curLatest.fetched_at).getTime()) {
+      latest.set(repoId, row);
+    }
+
+    const curOldest = oldest.get(repoId);
+    if (!curOldest || t < new Date(curOldest.fetched_at).getTime()) {
+      oldest.set(repoId, row);
     }
   }
 
-  const repos = Array.from(latest.values()).map(mapRow);
-
-  // 获取每个仓库的最新全局 star 数（跨所有 since，用于计算增长量）
-  const repoIds = repos.map((r) => r.id);
-  const { data: globalSnapshots } = await supabase
-    .from("trending_snapshots")
-    .select("repo_id, stargazers_count")
-    .in("repo_id", repoIds)
-    .order("fetched_at", { ascending: false });
-
-  if (globalSnapshots) {
-    const latestStars = new Map<number, number>();
-    for (const s of globalSnapshots) {
-      if (!latestStars.has(s.repo_id)) {
-        latestStars.set(s.repo_id, s.stargazers_count);
-      }
+  const repos = Array.from(latest.values()).map((row) => {
+    const repo = mapRow(row);
+    // 用最旧 snapshot 的星数做对比基准，计算增长量
+    const first = oldest.get(row.repositories.id);
+    if (first && first.fetched_at !== row.fetched_at) {
+      repo.snapshot_stargazers_count = first.stargazers_count;
     }
-    for (const repo of repos) {
-      const latest = latestStars.get(repo.id);
-      if (latest !== undefined) {
-        repo.stargazers_count = latest;
-      }
-    }
-  }
+    return repo;
+  });
 
   // 按 star 数量降序排列
   repos.sort((a, b) => b.stargazers_count - a.stargazers_count);
