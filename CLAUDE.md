@@ -63,12 +63,12 @@ src/
 │   │   ├── theme-toggle.tsx             # Dark/light/system mode toggle (DropdownMenu)
 │   │   └── language-switcher.tsx        # Locale switcher (en/zh/tw)
 │   ├── trending/                        # Feature components for the trending page
-│   │   ├── trending-header.tsx          # Page heading + time range selector
+│   │   ├── trending-header.tsx          # Page heading + subtitle (count + last updated)
 │   │   ├── language-filter.tsx          # Programming language filter bar
 │   │   ├── repository-grid.tsx          # Responsive card grid
-│   │   ├── repository-card.tsx          # Individual repo card (clickable → detail page)
+│   │   ├── repository-card.tsx          # Individual repo card with star growth badge (oldest→latest diff)
 │   │   ├── repository-card-skeleton.tsx # Loading placeholder
-│   │   └── time-range-selector.tsx      # daily/weekly/monthly toggle
+│   │   └── time-range-selector.tsx      # daily/weekly/monthly toggle (UNUSED — since dimension removed from UI)
 │   └── repo/                            # Repo detail page components
 │       ├── repo-header.tsx              # Repo metadata (avatar, stars, forks, topics, links)
 │       ├── stats-cards.tsx              # 6 KPI cards (stars/forks/issues/contributors/releases/growth) with sparkline
@@ -118,9 +118,9 @@ vercel.json                              # Vercel Cron Job config (midnight UTC 
 The home page (`src/app/[locale]/page.tsx`) follows the RSC (React Server Component) pattern:
 
 1. Page is an **async Server Component** — fetches data directly, no `useEffect` or client-side fetching
-2. `searchParams` drives `since` (daily/weekly/monthly) and `language` filters from URL query params
+2. `searchParams` drives `language` filter from URL query params (the `since` daily/weekly/monthly dimension has been **removed from the UI** — all trending repos are now shown together regardless of time range)
 3. `repository.service.ts` queries Supabase via the **anon key** (public read, RLS-enforced)
-4. Two parallel fetches: `getTrendingRepos()` + `getAvailableLanguages()` (no waterfall)
+4. Two parallel fetches: `getTrendingRepos({ language })` + `getAvailableLanguages()` (no waterfall)
 5. Three `<Suspense>` boundaries provide progressive loading: header → language filter → grid
 
 ### Repo Detail Page
@@ -140,9 +140,11 @@ The page also:
 - Uses `generateMetadata()` to dynamically set OG title/description/avatar for social sharing
 - Each Suspense section has a tailored skeleton fallback (pulsing bars for charts, blank card for README)
 
-### Sorting Strategy
+### Sorting & Star Growth
 
-Repositories are sorted **client-side by `stargazers_count` descending** because Supabase doesn't support ordering by joined table fields. The `rank` field in `trending_snapshots` is only for historical reference, not display ordering. This prevents duplicate rank 1 entries when a repo drops off the trending list between fetches.
+Repositories are sorted **client-side by `stargazers_count` descending** because Supabase doesn't support ordering by joined table fields. The `rank` field in `trending_snapshots` is only for historical reference, not display ordering.
+
+**Star Growth Calculation:** Each repo card shows a star growth badge (🟢 +N stars) computed as the difference between the **latest** and **oldest** snapshot's `stargazers_count`. The `getTrendingRepos()` function keeps both the newest and oldest snapshot per repo — `repo.stargazers_count` holds the latest value, and `repo.snapshot_stargazers_count` holds the oldest. The `starGrowth()` function computes `latest - oldest` for the badge.
 
 ### Theme System
 
@@ -284,10 +286,10 @@ Both API routes follow the same pattern: `force-dynamic`, `nodejs` runtime, secr
 1. Iterates over all three `since` values (daily, weekly, monthly)
 2. **Discovery**: scrapes GitHub Trending HTML via `cheerio`
 3. **Fetcher** (with concurrency limit of 5): fetches repo metadata from GitHub API
-4. **Snapshot generation**: creates `TrendingSnapshot` records combining candidate rank with fetched repo stats
-5. **Storage**: writes unique repos + all snapshots to Supabase via `service_role` key
+4. **Snapshot generation**: creates `TrendingSnapshot` records combining candidate rank with fetched repo stats (stars, forks, issues)
+5. **Storage**: writes unique repos (static metadata only — `stargazers_count`/`forks_count`/`open_issues_count`/`fetched_at` are **stripped before saving to `repositories`**) + all snapshots (with the volatile metrics) to Supabase via `service_role` key
 
-**Note:** TrendingJob no longer fetches READMEs — that's handled by enrich-details.
+**Note:** TrendingJob no longer fetches READMEs — that's handled by enrich-details. Volatile data (star/fork/issue counts) lives only in `trending_snapshots`, not in the `repositories` table.
 
 ### EnrichDetailsJob Flow (`definitions/enrich-details.job.ts`)
 
@@ -299,8 +301,9 @@ Both API routes follow the same pattern: `force-dynamic`, `nodejs` runtime, secr
    - Release summary — latest 5 releases (`GET /repos/{owner}/{repo}/releases?per_page=5`)
    - Contributor count — via `Link` header pagination trick (`GET /repos/{owner}/{repo}/contributors?per_page=1&anon=true`)
 3. Collects successful results, logs failures individually (non-fatal)
-4. Saves metadata via `repoStorage.saveBatch()`, README via `readmeStorage.saveBatch()`, and metrics (`commit_activity`, `contributor_count`, `release_count`, `latest_release_at`) via individual `UPDATE` on the `repositories` table
-5. Runs daily at 1:00 AM UTC — ensures all repo data stays fresh regardless of source
+4. Saves metadata (static fields only, volatile `stargazers_count`/`forks_count`/`open_issues_count` stripped) via `repoStorage.saveBatch()`, README via `readmeStorage.saveBatch()`, and metrics (`commit_activity`, `contributor_count`, `release_count`, `latest_release_at`) via individual `UPDATE` on the `repositories` table
+5. **Creates daily snapshots**: writes one `TrendingSnapshot` per repo with `since="daily"` and the current star/fork/issue counts — these accumulate over time to power the trend charts on the repo detail page
+6. Runs hourly via GitHub Actions (Vercel Cron `0 1 * * *` as backup) — ensures all repo data stays fresh
 
 ### Data Storage
 
@@ -324,17 +327,17 @@ Three tables, keyed by GitHub repository **id** (immutable integer):
 
 | Table | Primary Key | Purpose |
 |-------|------------|---------|
-| `repositories` | `id` (BIGINT) | Repo metadata + engineering metrics (stars, forks, issues, commit_activity, contributor_count, release_count, etc.) |
-| `trending_snapshots` | `(repo_id, since)` | Trending snapshots with repo metrics by time range |
+| `repositories` | `id` (BIGINT) | **Static** repo metadata only (name, description, language, topics, homepage, etc.) + engineering metrics (commit_activity, contributor_count, release_count, latest_release_at). Volatile data (stars/forks/issues) is **NOT** stored here — it lives in `trending_snapshots`. |
+| `trending_snapshots` | `(repo_id, since, fetched_at)` | Time-series snapshots: each fetch creates a unique row. Contains `stargazers_count`, `forks_count`, `open_issues_count` — the **only source of truth** for changing metrics. PK was migrated from `(repo_id, since)` to `(repo_id, since, fetched_at)` to store multiple data points over time. |
 | `readmes` | `repo_id` (BIGINT) | Raw README content |
 
 - All tables have `created_at` and `updated_at` TIMESTAMPTZ columns
 - `trending_snapshots.repo_id` and `readmes.repo_id` foreign-key to `repositories(id)`, `ON DELETE CASCADE`
-- `repositories` table includes engineering metrics columns: `commit_activity` (JSONB, 52-week array), `contributor_count` (INTEGER), `release_count` (INTEGER), `latest_release_at` (TIMESTAMPTZ)
+- `repositories` table engineering metrics: `commit_activity` (JSONB, 52-week array), `contributor_count` (INTEGER), `release_count` (INTEGER), `latest_release_at` (TIMESTAMPTZ)
 - RLS enabled: all tables allow `SELECT` for the `anon` role (read-only)
 - Writes use `service_role` key to bypass RLS
-- Indexes: `full_name`, `language`, `stargazers_count`, `since`, `fetched_at`
-- Schema includes migration statements (`ADD COLUMN IF NOT EXISTS`, `ALTER COLUMN`) for existing tables
+- Indexes: `full_name`, `language`, `since`, `fetched_at`
+- Schema includes migration statements (`ADD COLUMN IF NOT EXISTS`, `ALTER COLUMN`, PK constraint changes) for existing tables
 
 ### Adding a New Data Source
 
@@ -381,7 +384,7 @@ All three follow the same pattern: graceful error handling returns zero/empty de
 
 ## Notes
 
-- This project is **Vetta** — a Next.js app displaying trending GitHub repositories with daily/weekly/monthly views, language filtering, individual repo detail pages with README rendering and time-series charts, and Supabase-backed data.
+- This project is **Vetta** — a Next.js app displaying trending GitHub repositories with language filtering, individual repo detail pages with README rendering and time-series charts, and Supabase-backed data. The `since` (daily/weekly/monthly) dimension has been removed from the UI — all trending repos are now shown together. The `since` field still exists internally in `trending_snapshots` for historical data.
 - All user-facing strings must go through `next-intl` translations, not hardcoded.
 - Keep new pages under `src/app/[locale]/`.
 - Row-Level Security (RLS) should be enforced in Supabase for any data access — the anon key is public.
