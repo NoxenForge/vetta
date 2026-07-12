@@ -13,6 +13,7 @@ import {
   upsertBasicMetrics,
 } from "@/jobs/storage/supabase";
 import { mapWithConcurrency } from "@/jobs/utils/concurrency";
+import { startJobLog, finishJobLog } from "@/jobs/utils/job-logger";
 
 const SINCE_OPTIONS: TrendingOptions["since"][] = [
   "daily",
@@ -26,15 +27,25 @@ export const trendingJob: Job = {
   name: "trending",
 
   async run(ctx: JobContext): Promise<void> {
-    ctx.log("[TrendingJob] 开始执行...");
+    const { logId, startedAt } = await startJobLog({
+      job_type: "full",
+      trigger_type: "cron",
+      metadata: { since_options: SINCE_OPTIONS },
+    });
+
+    let status: "success" | "failed" = "success";
+    let errorMsg: string | undefined;
 
     const allRepos: Repository[] = [];
     const allHistory: MetricsHistoryRecord[] = [];
     let totalSuccess = 0;
     let totalFail = 0;
 
-    for (const since of SINCE_OPTIONS) {
-      ctx.log(`[TrendingJob] ── 抓取 since=${since} ──`);
+    try {
+      ctx.log("[TrendingJob] 开始执行...");
+
+      for (const since of SINCE_OPTIONS) {
+        ctx.log(`[TrendingJob] ── 抓取 since=${since} ──`);
 
       // ── Discovery ──
       const options: TrendingOptions = { since };
@@ -128,5 +139,17 @@ export const trendingJob: Job = {
     }
 
     ctx.log("[TrendingJob] 任务完成!");
+    } catch (error) {
+      status = "failed";
+      errorMsg = error instanceof Error ? error.message : String(error);
+      ctx.log(`[TrendingJob] 任务异常: ${errorMsg}`);
+    } finally {
+      await finishJobLog(logId, {
+        startedAt,
+        status,
+        error_message: errorMsg,
+        metadata: { repos_saved: allRepos.length, history_saved: allHistory?.length ?? 0 },
+      });
+    }
   },
 };

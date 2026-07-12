@@ -20,6 +20,7 @@ import {
   toRepoRow,
 } from "@/jobs/storage/supabase";
 import { mapWithConcurrency } from "@/jobs/utils/concurrency";
+import { startJobLog, finishJobLog } from "@/jobs/utils/job-logger";
 
 const MAX_CONCURRENCY = 5;
 
@@ -55,39 +56,50 @@ export const enrichDetailsJob: Job = {
   name: "enrich-details",
 
   async run(ctx: JobContext): Promise<void> {
-    ctx.log("[EnrichDetails] 开始全量刷新仓库详情...");
+    const { logId, startedAt } = await startJobLog({
+      job_type: "full",
+      trigger_type: "cron",
+    });
 
-    const supabase = getSupabase();
-
-    // 1. 查询所有仓库
-    const { data: repos, error: queryError } = await supabase
-      .from("repositories")
-      .select("id, owner, repo");
-
-    if (queryError) {
-      ctx.log(`[EnrichDetails] 查询仓库失败: ${queryError.message}`);
-      return;
-    }
-
-    const allRepos = (repos ?? []) as RepoRow[];
-
-    if (allRepos.length === 0) {
-      ctx.log("[EnrichDetails] 没有仓库记录，跳过");
-      return;
-    }
-
-    ctx.log(`[EnrichDetails] 共 ${allRepos.length} 个仓库待刷新`);
-
-    // 2. 并发刷新每个仓库
+    let status: "success" | "failed" = "success";
+    let errorMsg: string | undefined;
     let successMeta = 0;
     let successReadme = 0;
     let successDailyCommits = 0;
     let successRelease = 0;
     let successContrib = 0;
+    let repoCount = 0;
 
-    const allReposResult: Repository[] = [];
-    const allReadmeResults: Readme[] = [];
-    const allDailyCommits: Map<number, DailyCommitActivity["weeks"]> = new Map();
+    try {
+      ctx.log("[EnrichDetails] 开始全量刷新仓库详情...");
+
+      const supabase = getSupabase();
+
+      // 1. 查询所有仓库
+      const { data: repos, error: queryError } = await supabase
+        .from("repositories")
+        .select("id, owner, repo");
+
+      if (queryError) {
+        ctx.log(`[EnrichDetails] 查询仓库失败: ${queryError.message}`);
+        return;
+      }
+
+      const allRepos = (repos ?? []) as RepoRow[];
+
+      if (allRepos.length === 0) {
+        ctx.log("[EnrichDetails] 没有仓库记录，跳过");
+        return;
+      }
+
+      repoCount = allRepos.length;
+      ctx.log(`[EnrichDetails] 共 ${repoCount} 个仓库待刷新`);
+
+      // 2. 并发刷新每个仓库
+
+      const allReposResult: Repository[] = [];
+      const allReadmeResults: Readme[] = [];
+      const allDailyCommits: Map<number, DailyCommitActivity["weeks"]> = new Map();
 
     const results = await mapWithConcurrency(
       allRepos,
@@ -247,5 +259,24 @@ export const enrichDetailsJob: Job = {
     }
 
     ctx.log("[EnrichDetails] 全量刷新完成!");
+    } catch (error) {
+      status = "failed";
+      errorMsg = error instanceof Error ? error.message : String(error);
+      ctx.log(`[EnrichDetails] 任务异常: ${errorMsg}`);
+    } finally {
+      await finishJobLog(logId, {
+        startedAt,
+        status,
+        error_message: errorMsg,
+        metadata: {
+          repos_total: repoCount,
+          meta_ok: successMeta,
+          readme_ok: successReadme,
+          daily_commit_ok: successDailyCommits,
+          release_ok: successRelease,
+          contrib_ok: successContrib,
+        },
+      });
+    }
   },
 };
