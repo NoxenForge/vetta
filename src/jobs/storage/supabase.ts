@@ -3,7 +3,8 @@ import type { Storage } from "./types";
 import type {
   Repository,
   RepoRow,
-  TrendingSnapshot,
+  MetricsRow,
+  MetricsHistoryRecord,
   Readme,
 } from "@/jobs/fetcher/types";
 
@@ -24,14 +25,39 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-/** Repository 表名 */
-const REPOS_TABLE = "repositories";
-/** Trending Snapshot 表名 */
-const SNAPS_TABLE = "trending_snapshots";
-/** README 表名 */
-const READMES_TABLE = "readmes";
+// ── 表名常量 ─────────────────────────────────────────────
 
-/** Repository Supabase 存储（只写入静态字段，变动数据由 snapshots 管理） */
+const REPOS_TABLE = "repositories";
+const METRICS_TABLE = "repository_metrics";
+const HISTORY_TABLE = "repository_metrics_history";
+const READMES_TABLE = "repository_readmes";
+
+// ── Repository 存储（静态字段）─────────────────────────────
+
+/** 将完整的 Repository 对象转换为 repositories 表可写入的 RepoRow */
+export function toRepoRow(repo: Repository): RepoRow {
+  return {
+    id: repo.id,
+    full_name: repo.full_name,
+    owner: repo.owner,
+    repo: repo.repo,
+    html_url: repo.html_url,
+    avatar_url: repo.avatar_url,
+    description: repo.description,
+    language: repo.language,
+    topics: repo.topics,
+    license: repo.license,
+    homepage: repo.homepage,
+    default_branch: repo.default_branch,
+    visibility: repo.visibility,
+    archived: repo.archived,
+    fork: repo.fork,
+    is_template: repo.is_template,
+    github_created_at: repo.github_created_at,
+    github_updated_at: repo.github_updated_at,
+  };
+}
+
 export const repoStorage: Storage<RepoRow> = {
   name: "supabase-repositories",
 
@@ -55,31 +81,74 @@ export const repoStorage: Storage<RepoRow> = {
   },
 };
 
-/** TrendingSnapshot Supabase 存储 */
-export const snapStorage: Storage<TrendingSnapshot> = {
-  name: "supabase-snapshots",
+// ── Metrics 存储（当前动态指标）─────────────────────────────
 
-  async save(data: TrendingSnapshot): Promise<void> {
+export const metricsStorage: Storage<MetricsRow> = {
+  name: "supabase-metrics",
+
+  async save(data: MetricsRow): Promise<void> {
     const supabase = getSupabase();
     const { error } = await supabase
-      .from(SNAPS_TABLE)
-      .insert(data);
+      .from(METRICS_TABLE)
+      .upsert(data, { onConflict: "repo_id" });
 
-    if (error) throw new Error(`Snapshot 写入失败: ${error.message}`);
+    if (error) throw new Error(`Metrics 写入失败: ${error.message}`);
   },
 
-  async saveBatch(data: TrendingSnapshot[]): Promise<void> {
+  async saveBatch(data: MetricsRow[]): Promise<void> {
     if (data.length === 0) return;
     const supabase = getSupabase();
     const { error } = await supabase
-      .from(SNAPS_TABLE)
-      .insert(data);
+      .from(METRICS_TABLE)
+      .upsert(data, { onConflict: "repo_id" });
 
-    if (error) throw new Error(`Snapshot 批量写入失败: ${error.message}`);
+    if (error) throw new Error(`Metrics 批量写入失败: ${error.message}`);
   },
 };
 
-/** Readme Supabase 存储 */
+// ── Metrics History 存储（append-only 历史快照）────────────
+
+export const historyStorage: Storage<MetricsHistoryRecord> = {
+  name: "supabase-history",
+
+  async save(data: MetricsHistoryRecord): Promise<void> {
+    const supabase = getSupabase();
+    const { error } = await supabase.from(HISTORY_TABLE).insert(data);
+
+    if (error) throw new Error(`History 写入失败: ${error.message}`);
+  },
+
+  async saveBatch(data: MetricsHistoryRecord[]): Promise<void> {
+    if (data.length === 0) return;
+    const supabase = getSupabase();
+    const { error } = await supabase.from(HISTORY_TABLE).insert(data);
+
+    if (error) throw new Error(`History 批量写入失败: ${error.message}`);
+  },
+};
+
+// ── 基础指标写入（仅 Trending Job 已知字段，不覆盖 enrich 数据）──
+
+/** 仅更新 Trending Job 有能力抓取的基础指标字段，不覆盖 enrich 专属字段 */
+export async function upsertBasicMetrics(
+  rows: Array<{
+    repo_id: number;
+    stargazers_count: number;
+    forks_count: number;
+    open_issues_count: number;
+    pushed_at: string;
+  }>,
+): Promise<void> {
+  if (rows.length === 0) return;
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from(METRICS_TABLE)
+    .upsert(rows, { onConflict: "repo_id" });
+  if (error) throw new Error(`基础指标写入失败: ${error.message}`);
+}
+
+// ── Readme 存储 ────────────────────────────────────────────
+
 export const readmeStorage: Storage<Readme> = {
   name: "supabase-readmes",
 

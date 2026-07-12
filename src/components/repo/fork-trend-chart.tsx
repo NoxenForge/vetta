@@ -1,8 +1,8 @@
-/** 复刻趋势折线图 — 展示全部快照时间序列，仅在 ≥2 个数据点时显示 */
+/** 复刻趋势折线图 — 仅在 ≥2 个数据点时显示 */
 "use client";
 
 import { useMemo } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import {
   LineChart,
   Line,
@@ -12,36 +12,40 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import type { TrendSnapshot } from "@/types/ui";
+import type { MetricsHistoryPoint } from "@/types/ui";
 
 interface ForkTrendChartProps {
-  snapshots: TrendSnapshot[];
+  history: MetricsHistoryPoint[];
 }
 
-function formatAxis(n: number): string {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(0)}k`;
-  return n.toString();
+function formatAxis(n: number, locale: string): string {
+  return new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 }).format(n);
 }
 
-export function ForkTrendChart({ snapshots }: ForkTrendChartProps) {
+export function ForkTrendChart({ history }: ForkTrendChartProps) {
   const t = useTranslations("Repo");
+  const i18nLocale = useLocale();
+  const locale = i18nLocale || "en";
 
   const chartData = useMemo(() => {
-    return [...snapshots]
+    // 防御性排序：确保按 snapshot_at 升序（service 层已排序，此处作为安全网）
+    return [...history]
       .sort(
         (a, b) =>
-          new Date(a.fetched_at).getTime() -
-          new Date(b.fetched_at).getTime(),
+          new Date(a.snapshot_at).getTime() -
+          new Date(b.snapshot_at).getTime(),
       )
-      .map((s) => ({
-        date: new Date(s.fetched_at).toLocaleDateString(undefined, {
+      .map((h) => ({
+        date: new Date(h.snapshot_at).toLocaleString(locale, {
           month: "short",
           day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
         }),
-        forks: s.forks_count,
+        forks: h.forks_count,
       }));
-  }, [snapshots]);
+  }, [history, locale]);
 
   if (chartData.length < 2) {
     return null;
@@ -82,7 +86,7 @@ export function ForkTrendChart({ snapshots }: ForkTrendChartProps) {
             <YAxis
               domain={yDomain}
               tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-              tickFormatter={formatAxis}
+              tickFormatter={(n) => formatAxis(n, locale)}
               tickLine={false}
               axisLine={false}
               width={50}
@@ -100,7 +104,7 @@ export function ForkTrendChart({ snapshots }: ForkTrendChartProps) {
                 marginBottom: 4,
               }}
               formatter={(value) => [
-                Number(value).toLocaleString(),
+                Number(value).toLocaleString(locale),
                 t("statsForks"),
               ]}
             />

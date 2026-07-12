@@ -8,7 +8,6 @@ import { StarGrowthChart } from "@/components/repo/star-growth-chart";
 import { ForkTrendChart } from "@/components/repo/fork-trend-chart";
 import { MetricsDashboard } from "@/components/repo/metrics-dashboard";
 import { ReadmeViewer } from "@/components/repo/readme-viewer";
-import { TrendChart } from "@/components/repo/trend-chart";
 
 interface PageProps {
   params: Promise<{ owner: string; repo: string }>;
@@ -54,24 +53,39 @@ export default async function RepoDetailPage({ params }: PageProps) {
           <StatsCards detail={detail} />
         </Suspense>
 
-        {/* 3. 星星增长折线图 */}
-        <Suspense
-          fallback={
-            <div className="rounded-lg border bg-card">
-              <div className="border-b px-6 py-3">
-                <div className="h-4 w-24 rounded-md bg-muted animate-pulse" />
-              </div>
-              <div className="px-4 py-6">
-                <div className="h-54 w-full rounded-md bg-muted animate-pulse" />
-              </div>
-            </div>
-          }
-        >
-          <StarGrowthChart snapshots={detail.snapshots} />
-        </Suspense>
-
-        {/* 4. 复刻趋势折线图（仅在 ≥2 快照时渲染） */}
-        {detail.snapshots.length >= 2 && (
+        {/* 3. 趋势图（Star Growth + Fork Trend 并排） */}
+        {detail.history.length >= 2 ? (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Suspense
+              fallback={
+                <div className="rounded-lg border bg-card">
+                  <div className="border-b px-6 py-3">
+                    <div className="h-4 w-24 rounded-md bg-muted animate-pulse" />
+                  </div>
+                  <div className="px-4 py-6">
+                    <div className="h-54 w-full rounded-md bg-muted animate-pulse" />
+                  </div>
+                </div>
+              }
+            >
+              <StarGrowthChart history={detail.history} />
+            </Suspense>
+            <Suspense
+              fallback={
+                <div className="rounded-lg border bg-card">
+                  <div className="border-b px-6 py-3">
+                    <div className="h-4 w-24 rounded-md bg-muted animate-pulse" />
+                  </div>
+                  <div className="px-4 py-6">
+                    <div className="h-54 w-full rounded-md bg-muted animate-pulse" />
+                  </div>
+                </div>
+              }
+            >
+              <ForkTrendChart history={detail.history} />
+            </Suspense>
+          </div>
+        ) : (
           <Suspense
             fallback={
               <div className="rounded-lg border bg-card">
@@ -84,7 +98,7 @@ export default async function RepoDetailPage({ params }: PageProps) {
               </div>
             }
           >
-            <ForkTrendChart snapshots={detail.snapshots} />
+            <StarGrowthChart history={detail.history} />
           </Suspense>
         )}
 
@@ -115,16 +129,6 @@ export default async function RepoDetailPage({ params }: PageProps) {
           />
         </Suspense>
 
-        {/* 7. 趋势历史表 */}
-        <Suspense
-          fallback={
-            <div className="rounded-lg border bg-card p-8">
-              <div className="h-4 w-40 rounded-md bg-muted animate-pulse" />
-            </div>
-          }
-        >
-          <TrendChart snapshots={detail.snapshots} />
-        </Suspense>
       </div>
     </main>
   );

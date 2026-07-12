@@ -48,8 +48,7 @@ function formatNumber(n: number): string {
 
 function timeAgo(
   dateStr: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  t: (key: string, values?: any) => string,
+  t: (key: string, values?: { count: number }) => string,
 ): string {
   const now = Date.now();
   const date = new Date(dateStr).getTime();
@@ -68,7 +67,7 @@ function timeAgo(
 }
 
 function starGrowth(repo: TrendingRepo): number {
-  return repo.stargazers_count - repo.snapshot_stargazers_count;
+  return repo.stargazers_count - repo.oldest_stargazers_count;
 }
 
 interface RepositoryCardProps {
@@ -136,7 +135,7 @@ export async function RepositoryCard({ repo }: RepositoryCardProps) {
         </span>
         <span className="inline-flex items-center gap-1 ml-auto">
           <Clock className="h-3 w-3" />
-          {timeAgo(repo.updated_at, t)}
+          {timeAgo(repo.pushed_at, t)}
         </span>
       </div>
 

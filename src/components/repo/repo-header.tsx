@@ -126,9 +126,9 @@ export async function RepoHeader({ detail }: RepoHeaderProps) {
           </span>
           {t("issues", { count: detail.open_issues_count }).replace(formatNumber(detail.open_issues_count), "").trim()}
         </span>
-        {detail.created_at && (
+        {detail.github_created_at && (
           <span className="text-xs">
-            {t("created", { date: new Date(detail.created_at).toLocaleDateString() })}
+            {t("created", { date: new Date(detail.github_created_at).toLocaleDateString() })}
           </span>
         )}
       </div>

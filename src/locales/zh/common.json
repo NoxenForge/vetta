@@ -78,6 +78,9 @@
     "statsReleases": "版本发布",
     "metricsRadar": "项目健康度",
     "metricsCommitPulse": "提交活跃度",
+    "metricsLess": "少",
+    "metricsMore": "多",
+    "metricsCommitCount": "{count, number} 次提交",
     "metricsNotEnoughData": "暂无工程指标数据。",
     "metricsOneYearAgo": "1 年前",
     "metricsNow": "现在"

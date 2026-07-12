@@ -1,10 +1,11 @@
 /** 仓库统计 KPI 卡片行 — 大数字 + sparkline 迷你图 */
 "use client";
 
+import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { Star, GitFork, CircleDot, TrendingUp, Users, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { RepoDetail, TrendSnapshot } from "@/types/ui";
+import type { RepoDetail } from "@/types/ui";
 
 interface StatsCardsProps {
   detail: RepoDetail;
@@ -14,18 +15,6 @@ function formatNumber(n: number): string {
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return n.toLocaleString();
-}
-
-/** 计算全面快照范围内 star 的增长量（最新 - 最旧） */
-function computeTotalGrowth(snapshots: TrendSnapshot[]): number {
-  if (snapshots.length < 2) return 0;
-  const sorted = [...snapshots].sort(
-    (a, b) =>
-      new Date(a.fetched_at).getTime() - new Date(b.fetched_at).getTime(),
-  );
-  const newest = sorted[sorted.length - 1];
-  const oldest = sorted[0];
-  return newest.stargazers_count - oldest.stargazers_count;
 }
 
 /** 迷你 sparkline 折线 — 纯 SVG，不依赖 recharts */
@@ -76,15 +65,32 @@ function Sparkline({
 export function StatsCards({ detail }: StatsCardsProps) {
   const t = useTranslations("Repo");
 
-  const totalGrowth = computeTotalGrowth(detail.snapshots);
-
-  // 提取 snapshots 的 star/forks 数据用于 sparkline
-  const sortedSnapshots = [...detail.snapshots].sort(
-    (a, b) =>
-      new Date(a.fetched_at).getTime() - new Date(b.fetched_at).getTime(),
+  // 排序一次，共享结果给 totalGrowth 和 sparkline
+  const sortedHistory = useMemo(
+    () =>
+      [...detail.history].sort(
+        (a, b) =>
+          new Date(a.snapshot_at).getTime() - new Date(b.snapshot_at).getTime(),
+      ),
+    [detail.history],
   );
-  const starData = sortedSnapshots.map((s) => s.stargazers_count);
-  const forkData = sortedSnapshots.map((s) => s.forks_count);
+
+  const totalGrowth = useMemo(() => {
+    if (sortedHistory.length < 2) return 0;
+    return (
+      sortedHistory[sortedHistory.length - 1].stargazers_count -
+      sortedHistory[0].stargazers_count
+    );
+  }, [sortedHistory]);
+
+  const starData = useMemo(
+    () => sortedHistory.map((s) => s.stargazers_count),
+    [sortedHistory],
+  );
+  const forkData = useMemo(
+    () => sortedHistory.map((s) => s.forks_count),
+    [sortedHistory],
+  );
 
   const cards = [
     {
@@ -120,7 +126,7 @@ export function StatsCards({ detail }: StatsCardsProps) {
     },
     {
       icon: Package,
-      value: detail.release_count ?? 0,
+      value: detail.release_count,
       label: t("statsReleases"),
       data: null,
     },

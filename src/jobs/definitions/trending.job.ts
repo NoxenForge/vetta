@@ -2,8 +2,17 @@ import type { Job, JobContext } from "@/jobs/scheduler/types";
 import { githubTrending } from "@/jobs/discovery/github-trending";
 import type { TrendingOptions } from "@/jobs/discovery/types";
 import { repositoryFetcher } from "@/jobs/fetcher/repository";
-import type { Repository, TrendingSnapshot } from "@/jobs/fetcher/types";
-import { repoStorage, snapStorage } from "@/jobs/storage/supabase";
+import type {
+  Repository,
+  MetricsHistoryRecord,
+} from "@/jobs/fetcher/types";
+import {
+  repoStorage,
+  historyStorage,
+  toRepoRow,
+  upsertBasicMetrics,
+} from "@/jobs/storage/supabase";
+import { mapWithConcurrency } from "@/jobs/utils/concurrency";
 
 const SINCE_OPTIONS: TrendingOptions["since"][] = [
   "daily",
@@ -13,29 +22,6 @@ const SINCE_OPTIONS: TrendingOptions["since"][] = [
 
 const MAX_CONCURRENCY = 5;
 
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  fn: (item: T, index: number) => Promise<R>,
-  concurrency: number,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let nextIndex = 0;
-
-  async function worker(): Promise<void> {
-    while (nextIndex < items.length) {
-      const index = nextIndex++;
-      results[index] = await fn(items[index], index);
-    }
-  }
-
-  const workers: Promise<void>[] = [];
-  for (let i = 0; i < concurrency; i++) {
-    workers.push(worker());
-  }
-  await Promise.all(workers);
-  return results;
-}
-
 export const trendingJob: Job = {
   name: "trending",
 
@@ -43,7 +29,7 @@ export const trendingJob: Job = {
     ctx.log("[TrendingJob] 开始执行...");
 
     const allRepos: Repository[] = [];
-    const allSnapshots: TrendingSnapshot[] = [];
+    const allHistory: MetricsHistoryRecord[] = [];
     let totalSuccess = 0;
     let totalFail = 0;
 
@@ -73,18 +59,19 @@ export const trendingJob: Job = {
               `[TrendingJob] ${since} #${index + 1} ${candidate.owner}/${candidate.repo} ✅`,
             );
 
-            // 生成快照（在 Job 层组合）
-            const snapshot: TrendingSnapshot = {
+            // 生成历史快照（append-only）
+            const historyRecord: MetricsHistoryRecord = {
               repo_id: repo.id,
-              since,
-              rank: candidate.rank,
               stargazers_count: repo.stargazers_count,
               forks_count: repo.forks_count,
               open_issues_count: repo.open_issues_count,
-              fetched_at: repo.fetched_at,
+              contributor_count: null,
+              release_count: 0,
+              pushed_at: repo.pushed_at,
+              snapshot_at: repo.fetched_at,
             };
 
-            return { repo, snapshot };
+            return { repo, historyRecord };
           } catch (error) {
             totalFail++;
             ctx.log(
@@ -99,7 +86,7 @@ export const trendingJob: Job = {
       for (const r of results) {
         if (r) {
           allRepos.push(r.repo);
-          allSnapshots.push(r.snapshot);
+          allHistory.push(r.historyRecord);
         }
       }
     }
@@ -108,23 +95,36 @@ export const trendingJob: Job = {
       `[TrendingJob] 全部抓取完成: 成功 ${totalSuccess}，失败 ${totalFail}`,
     );
 
-    // ── Storage: 写入 Supabase ──
+    // ── Storage ──
     if (allRepos.length > 0) {
+      // 去重后写入 repositories（静态字段）
       const uniqueRepos = Array.from(
         new Map(allRepos.map((r) => [r.id, r])).values(),
       );
-      const repoRows = uniqueRepos.map(
-        ({ stargazers_count, forks_count, open_issues_count, fetched_at, ...row }) => row,
-      );
-      await repoStorage.saveBatch(repoRows);
+
+      await repoStorage.saveBatch(uniqueRepos.map(toRepoRow));
       ctx.log(
         `[TrendingJob] 已存储 ${uniqueRepos.length} 条仓库元数据`,
       );
+
+      // 写入 repository_metrics（仅基础字段，不覆盖 enrich 专属数据）
+      await upsertBasicMetrics(
+        uniqueRepos.map((r) => ({
+          repo_id: r.id,
+          stargazers_count: r.stargazers_count,
+          forks_count: r.forks_count,
+          open_issues_count: r.open_issues_count,
+          pushed_at: r.pushed_at,
+        })),
+      );
+      ctx.log(
+        `[TrendingJob] 已存储 ${uniqueRepos.length} 条基础指标`,
+      );
     }
 
-    if (allSnapshots.length > 0) {
-      await snapStorage.saveBatch(allSnapshots);
-      ctx.log(`[TrendingJob] 已存储 ${allSnapshots.length} 条快照`);
+    if (allHistory.length > 0) {
+      await historyStorage.saveBatch(allHistory);
+      ctx.log(`[TrendingJob] 已存储 ${allHistory.length} 条历史快照`);
     }
 
     ctx.log("[TrendingJob] 任务完成!");

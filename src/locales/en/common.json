@@ -78,6 +78,9 @@
     "statsReleases": "Releases",
     "metricsRadar": "Project Health",
     "metricsCommitPulse": "Commit Pulse",
+    "metricsLess": "Less",
+    "metricsMore": "More",
+    "metricsCommitCount": "{count, number} commits",
     "metricsNotEnoughData": "Metrics data not yet available.",
     "metricsOneYearAgo": "1 year ago",
     "metricsNow": "Now"

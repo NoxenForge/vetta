@@ -19,6 +19,8 @@ export const readmeFetcher: Fetcher<Readme> = {
     return {
       repo_id: 0, // 由 Job 层在外层补填
       content,
+      content_hash: "", // 由 Job 层计算 SHA-256
+      etag: null,
       size_bytes: content.length,
       fetched_at: new Date().toISOString(),
     };

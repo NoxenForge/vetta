@@ -67,7 +67,7 @@ export default async function HomePage({ searchParams }: PageProps) {
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="space-y-6">
         <Suspense fallback={<HeaderSkeleton />}>
-          <TrendingHeader count={repos.length} updatedAt={repos[0]?.snapshot_fetched_at} />
+          <TrendingHeader count={repos.length} updatedAt={repos[0]?.pushed_at} />
         </Suspense>
 
         <Suspense fallback={null}>

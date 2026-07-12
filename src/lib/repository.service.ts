@@ -3,7 +3,7 @@ import type {
   TrendingRepo,
   TrendingFilters,
   RepoDetail,
-  TrendSnapshot,
+  MetricsHistoryPoint,
 } from "@/types/ui";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -16,85 +16,103 @@ function getClient() {
   return createClient(supabaseUrl, supabaseKey);
 }
 
-/** 快照行原始数据（Supabase join 返回格式 — repositories 不含变动数据列） */
-interface SnapshotRow {
-  since: string;
-  rank: number;
+// ── 原始行类型（Supabase join 返回格式）─────────────────
+
+interface RepoRow {
+  id: number;
+  full_name: string;
+  owner: string;
+  repo: string;
+  html_url: string;
+  avatar_url: string;
+  description: string | null;
+  language: string | null;
+  topics: string[];
+  license: string | null;
+  homepage: string | null;
+  default_branch: string;
+  visibility: string;
+  archived: boolean;
+  fork: boolean;
+  is_template: boolean;
+  github_created_at: string;
+  github_updated_at: string;
+}
+
+interface MetricsRow {
+  repo_id: number;
   stargazers_count: number;
   forks_count: number;
+  watchers_count: number;
+  subscribers_count: number;
+  open_issues_count: number;
+  network_count: number;
+  size: number;
+  contributor_count: number | null;
+  release_count: number;
+  latest_release_at: string | null;
+  pushed_at: string;
+  commit_activity: unknown | null;
   fetched_at: string;
-  repositories: {
-    id: number;
-    full_name: string;
-    owner: string;
-    repo: string;
-    avatar_url: string;
-    description: string | null;
-    language: string | null;
-    topics: string[];
-    homepage: string | null;
-    archived: boolean;
-    fork: boolean;
-    created_at: string;
-    updated_at: string;
-    pushed_at: string;
-    [key: string]: unknown;
-  };
 }
 
-function mapRow(row: SnapshotRow): TrendingRepo {
-  const r = row.repositories;
+interface HistoryRow {
+  id: number;
+  repo_id: number;
+  stargazers_count: number;
+  forks_count: number;
+  open_issues_count: number;
+  contributor_count: number | null;
+  release_count: number;
+  pushed_at: string | null;
+  snapshot_at: string;
+}
+
+interface ReadmeRow {
+  repo_id: number;
+  content: string;
+  size_bytes: number;
+  fetched_at: string;
+}
+
+// ── 辅助函数 ──────────────────────────────────────────
+
+function toMetricsHistoryPoint(row: HistoryRow): MetricsHistoryPoint {
   return {
-    id: r.id,
-    full_name: r.full_name,
-    owner: r.owner,
-    repo: r.repo,
-    avatar_url: r.avatar_url,
-    description: r.description,
-    language: r.language,
-    topics: r.topics ?? [],
-    homepage: r.homepage,
-    archived: r.archived,
-    fork: r.fork,
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-    pushed_at: r.pushed_at,
-    // 变动数据统一从 snapshot 读取
     stargazers_count: row.stargazers_count,
     forks_count: row.forks_count,
-    since: row.since,
-    rank: row.rank,
-    snapshot_stargazers_count: row.stargazers_count,
-    snapshot_forks_count: row.forks_count,
-    snapshot_fetched_at: row.fetched_at,
+    open_issues_count: row.open_issues_count,
+    contributor_count: row.contributor_count,
+    release_count: row.release_count,
+    pushed_at: row.pushed_at,
+    snapshot_at: row.snapshot_at,
   };
 }
 
-/**
- * 获取 Trending 仓库列表
- * 按 rank 升序排列，最多返回 50 条
- */
+// ── 获取 Trending 仓库列表 ─────────────────────────────
+
 export async function getTrendingRepos(
   filters: TrendingFilters,
 ): Promise<TrendingRepo[]> {
   const supabase = getClient();
 
-  const query = supabase
-    .from("trending_snapshots")
+  // 查询：repository_metrics JOIN repositories
+  let query = supabase
+    .from("repository_metrics")
     .select(
       `
-      since,
-      rank,
+      repo_id,
       stargazers_count,
       forks_count,
-      fetched_at,
+      open_issues_count,
+      pushed_at,
       repositories!inner(*)
     `,
     )
-    .limit(200);
+    .order("stargazers_count", { ascending: false });
 
   if (filters.language) {
-    query.eq("repositories.language", filters.language);
+    query = query.eq("repositories.language", filters.language);
   }
 
   const { data, error } = await query;
@@ -105,52 +123,67 @@ export async function getTrendingRepos(
 
   if (!data || data.length === 0) return [];
 
-  const rows = data as unknown as SnapshotRow[];
+  // 获取每个仓库的最旧历史快照（用于 star growth 计算）
+  const repoIds = data.map((d) => (d as Record<string, unknown>).repo_id as number);
+  const { data: oldestSnapshots } = await supabase
+    .from("repository_metrics_history")
+    .select("repo_id, stargazers_count")
+    .in("repo_id", repoIds)
+    .order("snapshot_at", { ascending: true });
 
-  // 每个仓库可能有多个 snapshot（PK: repo_id + since + fetched_at）
-  // 保留最新和最旧两个 snapshot：最新用于排序，差值用于增长计算
-  const latest = new Map<number, SnapshotRow>();
-  const oldest = new Map<number, SnapshotRow>();
-  for (const row of rows) {
-    const repoId = row.repositories.id;
-    const t = new Date(row.fetched_at).getTime();
-
-    const curLatest = latest.get(repoId);
-    if (!curLatest || t > new Date(curLatest.fetched_at).getTime()) {
-      latest.set(repoId, row);
-    }
-
-    const curOldest = oldest.get(repoId);
-    if (!curOldest || t < new Date(curOldest.fetched_at).getTime()) {
-      oldest.set(repoId, row);
+  // 按 repo_id 分组取最早的那条
+  const oldestByRepo = new Map<number, number>();
+  if (oldestSnapshots) {
+    for (const s of oldestSnapshots) {
+      if (!oldestByRepo.has(s.repo_id)) {
+        oldestByRepo.set(s.repo_id, s.stargazers_count);
+      }
     }
   }
 
-  const repos = Array.from(latest.values()).map((row) => {
-    const repo = mapRow(row);
-    // 用最旧 snapshot 的星数做对比基准，计算增长量
-    const first = oldest.get(row.repositories.id);
-    if (first && first.fetched_at !== row.fetched_at) {
-      repo.snapshot_stargazers_count = first.stargazers_count;
-    }
-    return repo;
-  });
+  // 组装 TrendingRepo 数组
+  const repos: TrendingRepo[] = [];
+  for (const row of data) {
+    const d = row as Record<string, unknown>;
+    const r = d.repositories as RepoRow;
+    const oldestStars = oldestByRepo.get(r.id) ?? (d.stargazers_count as number);
 
-  // 按 star 数量降序排列
-  repos.sort((a, b) => b.stargazers_count - a.stargazers_count);
+    repos.push({
+      id: r.id,
+      full_name: r.full_name,
+      owner: r.owner,
+      repo: r.repo,
+      html_url: r.html_url,
+      avatar_url: r.avatar_url,
+      description: r.description,
+      language: r.language,
+      topics: r.topics,
+      homepage: r.homepage,
+      visibility: r.visibility,
+      archived: r.archived,
+      fork: r.fork,
+      is_template: r.is_template,
+      github_created_at: r.github_created_at,
+      github_updated_at: r.github_updated_at,
+      stargazers_count: d.stargazers_count as number,
+      forks_count: d.forks_count as number,
+      open_issues_count: d.open_issues_count as number,
+      pushed_at: d.pushed_at as string,
+      oldest_stargazers_count: oldestStars,
+    });
+  }
 
   return repos;
 }
 
-/**
- * 获取所有可用的编程语言列表
- */
+// ── 获取所有可用语言 ───────────────────────────────────
+
 export async function getAvailableLanguages(): Promise<string[]> {
   const supabase = getClient();
 
   const { data, error } = await supabase
-    .from("trending_snapshots")
-    .select("repositories!inner(language)");
+    .from("repositories")
+    .select("language");
 
   if (error) {
     throw new Error(`获取语言列表失败: ${error.message}`);
@@ -160,29 +193,23 @@ export async function getAvailableLanguages(): Promise<string[]> {
 
   const languages = new Set<string>();
   for (const row of data) {
-    // Supabase !inner join returns nested object as a single object
-    const repo = (
-      row as unknown as { repositories: { language: string | null } }
-    ).repositories;
-    if (repo?.language) {
-      languages.add(repo.language);
+    if (row.language) {
+      languages.add(row.language);
     }
   }
 
   return Array.from(languages).sort();
 }
 
-/**
- * 获取单个仓库的完整详情（含 README 和所有时间范围的快照）
- * 不存在时返回 null
- */
+// ── 获取单个仓库完整详情 ───────────────────────────────
+
 export async function getRepoDetail(
   owner: string,
   repo: string,
 ): Promise<RepoDetail | null> {
   const supabase = getClient();
 
-  // 1. 查询仓库元数据
+  // 1. 查询仓库静态字段
   const { data: repoRow, error: repoError } = await supabase
     .from("repositories")
     .select("*")
@@ -191,70 +218,72 @@ export async function getRepoDetail(
     .single();
 
   if (repoError || !repoRow) return null;
+  const r = repoRow as unknown as RepoRow;
 
-  // 2. 并行查询 README 和所有快照
-  const [readmeResult, snapshotsResult] = await Promise.all([
-    supabase.from("readmes").select("*").eq("repo_id", repoRow.id).maybeSingle(),
+  // 2. 并行查询 metrics + README + 历史快照
+  const [metricsResult, readmeResult, historyResult] = await Promise.all([
     supabase
-      .from("trending_snapshots")
+      .from("repository_metrics")
       .select("*")
-      .eq("repo_id", repoRow.id)
-      .order("fetched_at", { ascending: false }),
+      .eq("repo_id", r.id)
+      .maybeSingle(),
+    supabase
+      .from("repository_readmes")
+      .select("*")
+      .eq("repo_id", r.id)
+      .maybeSingle(),
+    supabase
+      .from("repository_metrics_history")
+      .select("*")
+      .eq("repo_id", r.id)
+      .order("snapshot_at", { ascending: true }),
   ]);
 
-  const readmeRow = readmeResult.data;
-  const snapshotRows = (snapshotsResult.data ?? []) as unknown as TrendSnapshot[];
-  // 变动数据从最新 snapshot 读取
-  const latestSnapshot = snapshotRows[0] ?? null;
+  const metrics = (metricsResult.data ?? null) as MetricsRow | null;
+  const readme = (readmeResult.data ?? null) as ReadmeRow | null;
+  const historyRows = (historyResult.data ?? []) as unknown as HistoryRow[];
 
   return {
-    id: repoRow.id,
-    full_name: repoRow.full_name,
-    owner: repoRow.owner,
-    repo: repoRow.repo,
-    avatar_url: repoRow.avatar_url,
-    description: repoRow.description,
-    language: repoRow.language,
-    topics: repoRow.topics ?? [],
-    license: repoRow.license,
-    homepage: repoRow.homepage,
-    default_branch: repoRow.default_branch,
-    archived: repoRow.archived,
-    fork: repoRow.fork,
-    created_at: repoRow.created_at,
-    updated_at: repoRow.updated_at,
-    pushed_at: repoRow.pushed_at,
-    stargazers_count: latestSnapshot?.stargazers_count ?? 0,
-    forks_count: latestSnapshot?.forks_count ?? 0,
-    open_issues_count: latestSnapshot?.open_issues_count ?? 0,
-    fetched_at: latestSnapshot?.fetched_at ?? repoRow.updated_at,
-    commit_activity: Array.isArray(repoRow.commit_activity)
-      ? repoRow.commit_activity
-      : repoRow.commit_activity && typeof repoRow.commit_activity === "object"
-        ? (repoRow.commit_activity as { all?: number[] }).all ?? null
-        : null,
-    contributor_count:
-      typeof repoRow.contributor_count === "number"
-        ? repoRow.contributor_count
-        : null,
-    release_count:
-      typeof repoRow.release_count === "number"
-        ? repoRow.release_count
-        : null,
-    latest_release_at:
-      typeof repoRow.latest_release_at === "string"
-        ? repoRow.latest_release_at
-        : null,
-    readme_content: readmeRow?.content ?? null,
-    readme_size_bytes: readmeRow?.size_bytes ?? null,
-    readme_fetched_at: readmeRow?.fetched_at ?? null,
-    snapshots: snapshotRows.map((s) => ({
-      since: s.since,
-      rank: s.rank,
-      stargazers_count: s.stargazers_count,
-      forks_count: s.forks_count,
-      open_issues_count: s.open_issues_count,
-      fetched_at: s.fetched_at,
-    })),
+    // 静态
+    id: r.id,
+    full_name: r.full_name,
+    owner: r.owner,
+    repo: r.repo,
+    html_url: r.html_url,
+    avatar_url: r.avatar_url,
+    description: r.description,
+    language: r.language,
+    topics: r.topics ?? [],
+    license: r.license,
+    homepage: r.homepage,
+    default_branch: r.default_branch,
+    visibility: r.visibility,
+    archived: r.archived,
+    fork: r.fork,
+    is_template: r.is_template,
+    github_created_at: r.github_created_at,
+    github_updated_at: r.github_updated_at,
+    // 动态
+    stargazers_count: metrics?.stargazers_count ?? 0,
+    forks_count: metrics?.forks_count ?? 0,
+    watchers_count: metrics?.watchers_count ?? 0,
+    subscribers_count: metrics?.subscribers_count ?? 0,
+    open_issues_count: metrics?.open_issues_count ?? 0,
+    network_count: metrics?.network_count ?? 0,
+    size: metrics?.size ?? 0,
+    contributor_count: metrics?.contributor_count ?? null,
+    release_count: metrics?.release_count ?? 0,
+    latest_release_at: metrics?.latest_release_at ?? null,
+    pushed_at: metrics?.pushed_at ?? r.github_updated_at,
+    commit_activity: Array.isArray(metrics?.commit_activity)
+      ? (metrics!.commit_activity as unknown as import("@/types/ui").DailyCommitWeek[])
+      : null,
+    fetched_at: metrics?.fetched_at ?? "",
+    // README
+    readme_content: readme?.content ?? null,
+    readme_size_bytes: readme?.size_bytes ?? null,
+    readme_fetched_at: readme?.fetched_at ?? null,
+    // 历史
+    history: historyRows.map(toMetricsHistoryPoint),
   };
 }
